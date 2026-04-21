@@ -1,0 +1,178 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import { FileText, Filter, GraduationCap } from 'lucide-react';
+
+const rekapNilaiData = [
+  { id: 1, nis: '2024001', nama: 'Ahmad Fauzi', mapel: 'Matematika', jenis: 'UTS', nilai: 88, guru: 'Ustadz Ahmad Fauzi' },
+  { id: 2, nis: '2024002', nama: 'Siti Nurhaliza', mapel: 'Matematika', jenis: 'UTS', nilai: 92, guru: 'Ustadz Ahmad Fauzi' },
+  { id: 3, nis: '2024001', nama: 'Ahmad Fauzi', mapel: 'Bahasa Inggris', jenis: 'Quiz', nilai: 84, guru: 'Ustadz Rizal' },
+  { id: 4, nis: '2024002', nama: 'Siti Nurhaliza', mapel: 'Bahasa Inggris', jenis: 'Quiz', nilai: 89, guru: 'Ustadz Rizal' },
+  { id: 5, nis: '2024003', nama: 'Muhammad Rizki', mapel: 'Fisika', jenis: 'Tugas', nilai: 78, guru: 'Ustadz Muhammad Rizki' },
+  { id: 6, nis: '2024004', nama: 'Fatimah Azzahra', mapel: 'Fisika', jenis: 'Tugas', nilai: 85, guru: 'Ustadz Muhammad Rizki' },
+  { id: 7, nis: '2024005', nama: 'Abdullah Rahman', mapel: 'Kimia', jenis: 'UAS', nilai: 81, guru: 'Ustadzah Nabila' },
+  { id: 8, nis: '2024003', nama: 'Muhammad Rizki', mapel: 'Kimia', jenis: 'UAS', nilai: 76, guru: 'Ustadzah Nabila' },
+];
+
+const mapelOptions = ['Semua Mata Pelajaran', 'Matematika', 'Bahasa Inggris', 'Fisika', 'Kimia'];
+const jenisOptions = ['Semua Jenis', 'UTS', 'UAS', 'Tugas', 'Quiz'];
+
+export default function RekapNilaiGuruKelas() {
+  const [selectedMapel, setSelectedMapel] = useState('Semua Mata Pelajaran');
+  const [selectedJenis, setSelectedJenis] = useState('Semua Jenis');
+
+  const filteredNilai = useMemo(
+    () =>
+      rekapNilaiData.filter((item) => {
+        const matchMapel =
+          selectedMapel === 'Semua Mata Pelajaran' || item.mapel === selectedMapel;
+        const matchJenis = selectedJenis === 'Semua Jenis' || item.jenis === selectedJenis;
+        return matchMapel && matchJenis;
+      }),
+    [selectedMapel, selectedJenis]
+  );
+
+  const rataRata = useMemo(() => {
+    if (filteredNilai.length === 0) return '0.00';
+    const total = filteredNilai.reduce((sum, item) => sum + item.nilai, 0);
+    return (total / filteredNilai.length).toFixed(2);
+  }, [filteredNilai]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Rekap Nilai</h2>
+          <p className="mt-1 text-gray-600">
+            Pantau nilai semua mata pelajaran yang diinput oleh guru mata pelajaran
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB]">
+          <FileText size={18} />
+          Rekap Nilai Kelas
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 inline-flex rounded-lg bg-blue-100 p-3 text-[#2563EB]">
+            <GraduationCap size={20} />
+          </div>
+          <p className="text-sm text-gray-600">Total Data Nilai</p>
+          <p className="mt-1 text-xl font-bold text-gray-900">{filteredNilai.length} Entri</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 inline-flex rounded-lg bg-green-100 p-3 text-green-600">
+            <FileText size={20} />
+          </div>
+          <p className="text-sm text-gray-600">Rata-rata Nilai</p>
+          <p className="mt-1 text-xl font-bold text-gray-900">{rataRata}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 inline-flex rounded-lg bg-amber-100 p-3 text-amber-600">
+            <Filter size={20} />
+          </div>
+          <p className="text-sm text-gray-600">Filter Aktif</p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">
+            {selectedMapel} | {selectedJenis}
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Mata Pelajaran</label>
+            <select
+              value={selectedMapel}
+              onChange={(e) => setSelectedMapel(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
+            >
+              {mapelOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">Jenis Penilaian</label>
+            <select
+              value={selectedJenis}
+              onChange={(e) => setSelectedJenis(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
+            >
+              {jenisOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+      >
+        <div className="border-b border-gray-200 px-6 py-4">
+          <h3 className="font-semibold text-gray-900">Daftar Rekap Nilai Murid</h3>
+          <p className="mt-1 text-sm text-gray-600">
+            Menampilkan nilai semua mapel sesuai filter yang dipilih
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px]">
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">NIS</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Nama Siswa</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Jenis Penilaian</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Guru Mapel</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Nilai</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Grade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredNilai.map((item) => {
+                const grade =
+                  item.nilai >= 90 ? 'A' : item.nilai >= 80 ? 'B' : item.nilai >= 70 ? 'C' : item.nilai >= 60 ? 'D' : 'E';
+
+                return (
+                  <tr key={item.id} className="transition-colors hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.nis}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.nama}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.jenis}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.guru}</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">{item.nilai}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <span
+                        className={`rounded-full px-3 py-1 font-medium ${
+                          grade === 'A'
+                            ? 'bg-green-100 text-green-700'
+                            : grade === 'B'
+                            ? 'bg-blue-100 text-blue-700'
+                            : grade === 'C'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {grade}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
