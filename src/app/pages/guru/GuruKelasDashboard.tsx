@@ -1,23 +1,55 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ClipboardList, Users, BellRing } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useRouter } from 'next/navigation';
+import { EmptyState } from '../../components/dashboard/EmptyState';
 import { StatCard } from '../../components/dashboard/StatCard';
-
-const agendaKelas = [
-  { waktu: '07:00', agenda: 'Pengecekan kehadiran kelas X-A', lokasi: 'Ruang X-A' },
-  { waktu: '09:30', agenda: 'Koordinasi wali murid', lokasi: 'Ruang Guru' },
-  { waktu: '12:30', agenda: 'Rekap presensi harian', lokasi: 'Dashboard Presensi' },
-];
-
-const pengumumanKelas = [
-  { title: '2 siswa izin hari ini', detail: 'Perlu tindak lanjut wali kelas', tone: 'bg-amber-50 border-amber-200 text-amber-800' },
-  { title: 'Absensi mingguan belum lengkap', detail: 'Lengkapi sebelum Jumat sore', tone: 'bg-blue-50 border-blue-200 text-blue-800' },
-];
+import { formatTanggalIndonesia, getAttendanceRecords, getCurrentAuthProfile, type BackendAttendanceRecord, type BackendSchoolClass } from '../../lib/guruData';
 
 export default function GuruKelasDashboard() {
   const router = useRouter();
+  const [homeroomClasses, setHomeroomClasses] = useState<BackendSchoolClass[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<BackendAttendanceRecord[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const profile = await getCurrentAuthProfile();
+      const classes = profile?.dashboard_context?.homeroom_classes ?? [];
+      setHomeroomClasses(classes);
+
+      const allRecords = await Promise.all(
+        classes.map((item) => getAttendanceRecords({ classId: item.id }))
+      );
+
+      setAttendanceRecords(allRecords.flat());
+    };
+
+    void loadData();
+  }, []);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const totalStudents = homeroomClasses.reduce((sum, item) => sum + (item.student_count ?? 0), 0);
+  const todayRecords = attendanceRecords.filter((item) => item.attendance_date.slice(0, 10) === today);
+  const needFollowUp = todayRecords.filter((item) => item.status !== 'Hadir').length;
+  const weeklyRecords = attendanceRecords.filter((item) => {
+    const diff = Date.now() - new Date(item.attendance_date).getTime();
+    return diff <= 7 * 24 * 60 * 60 * 1000;
+  });
+
+  const reminders = useMemo(
+    () =>
+      todayRecords
+        .filter((item) => item.status !== 'Hadir')
+        .slice(0, 3)
+        .map((item) => ({
+          title: item.student?.name ?? 'Siswa',
+          detail: `${item.status} - ${item.notes || formatTanggalIndonesia(item.attendance_date)}`,
+          tone: 'bg-amber-50 border-amber-200 text-amber-700',
+        })),
+    [todayRecords]
+  );
 
   return (
     <div className="space-y-8">
@@ -29,10 +61,10 @@ export default function GuruKelasDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Users} label="Total Siswa Kelas" value="32" color="bg-blue-100 text-blue-600" />
-        <StatCard icon={ClipboardList} label="Presensi Hari Ini" value="30/32" color="bg-green-100 text-green-600" />
-        <StatCard icon={CalendarDays} label="Kegiatan Minggu Ini" value="5" color="bg-purple-100 text-purple-600" />
-        <StatCard icon={BellRing} label="Perlu Tindak Lanjut" value="2" color="bg-orange-100 text-orange-600" />
+        <StatCard icon={Users} label="Total Siswa Kelas" value={String(totalStudents)} color="bg-blue-100 text-blue-600" />
+        <StatCard icon={ClipboardList} label="Presensi Hari Ini" value={`${todayRecords.length}/${totalStudents}`} color="bg-green-100 text-green-600" />
+        <StatCard icon={CalendarDays} label="Kegiatan Minggu Ini" value={String(weeklyRecords.length)} color="bg-purple-100 text-purple-600" />
+        <StatCard icon={BellRing} label="Perlu Tindak Lanjut" value={String(needFollowUp)} color="bg-orange-100 text-orange-600" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -42,19 +74,26 @@ export default function GuruKelasDashboard() {
           className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
         >
           <h3 className="mb-6 text-lg font-semibold text-gray-900">Agenda Hari Ini</h3>
-          <div className="space-y-4">
-            {agendaKelas.map((item) => (
-              <div key={item.agenda} className="rounded-lg border border-gray-200 p-4">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="font-semibold text-gray-900">{item.agenda}</span>
-                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-[#2563EB]">
-                    {item.waktu}
-                  </span>
+          {homeroomClasses.length === 0 ? (
+            <EmptyState
+              message="Belum ada kelas wali"
+              description="Kelas yang ditetapkan admin akan tampil di sini."
+            />
+          ) : (
+            <div className="space-y-4">
+              {homeroomClasses.map((item) => (
+                <div key={item.id} className="rounded-lg border border-gray-200 p-4">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="font-semibold text-gray-900">{item.name}</span>
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-[#2563EB]">
+                      {item.level}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">{item.student_count ?? 0} siswa</p>
                 </div>
-                <p className="text-sm text-gray-600">{item.lokasi}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </motion.div>
 
         <motion.div
@@ -64,14 +103,21 @@ export default function GuruKelasDashboard() {
           className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
         >
           <h3 className="mb-6 text-lg font-semibold text-gray-900">Pengingat Kelas</h3>
-          <div className="space-y-4">
-            {pengumumanKelas.map((item) => (
-              <div key={item.title} className={`rounded-lg border p-4 ${item.tone}`}>
-                <div className="mb-1 font-semibold">{item.title}</div>
-                <p className="text-sm">{item.detail}</p>
-              </div>
-            ))}
-          </div>
+          {reminders.length === 0 ? (
+            <EmptyState
+              message="Belum ada pengingat"
+              description="Pengingat kelas akan tampil di sini setelah ada aktivitas yang perlu ditindaklanjuti."
+            />
+          ) : (
+            <div className="space-y-4">
+              {reminders.map((item) => (
+                <div key={`${item.title}-${item.detail}`} className={`rounded-lg border p-4 ${item.tone}`}>
+                  <p className="font-semibold">{item.title}</p>
+                  <p className="mt-1 text-sm">{item.detail}</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <button

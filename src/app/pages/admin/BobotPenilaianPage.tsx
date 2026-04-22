@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, Percent, Save, Trophy } from 'lucide-react';
 import { Toast, useToast } from '../../components/dashboard/Toast';
+import { apiRequest } from '../../lib/api';
 import {
-  BOBOT_PENILAIAN_STORAGE_KEY,
-  defaultBobotPenilaianConfig,
   type BobotPenilaianItem,
   type GradeRangeItem,
 } from '../../lib/bobotPenilaianStore';
@@ -18,37 +17,55 @@ const gradeBadgeTone: Record<string, string> = {
   E: 'bg-red-100 text-red-700',
 };
 
+interface BackendGradeWeight {
+  id: number;
+  title: string;
+  knowledge_weight: number;
+  skill_weight: number;
+  attitude_weight: number;
+  components?: BobotPenilaianItem[] | null;
+  grade_ranges?: GradeRangeItem[] | null;
+}
+
+const deriveLegacyWeights = (items: BobotPenilaianItem[]) => {
+  const bobotById = Object.fromEntries(items.map((item) => [item.id, item.bobot]));
+
+  return {
+    knowledge_weight: Number(bobotById.quiz ?? 0) + Number(bobotById.tugas ?? 0),
+    skill_weight: Number(bobotById.uts ?? 0),
+    attitude_weight: Number(bobotById.uas ?? 0),
+  };
+};
+
 export default function BobotPenilaianPage() {
-  const [bobotPenilaian, setBobotPenilaian] = useState<BobotPenilaianItem[]>(
-    defaultBobotPenilaianConfig.bobot
-  );
-  const [gradeRanges, setGradeRanges] = useState<GradeRangeItem[]>(
-    defaultBobotPenilaianConfig.gradeRanges
-  );
+  const [recordId, setRecordId] = useState<number | null>(null);
+  const [bobotPenilaian, setBobotPenilaian] = useState<BobotPenilaianItem[]>([]);
+  const [gradeRanges, setGradeRanges] = useState<GradeRangeItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
-    const storedConfig = window.localStorage.getItem(BOBOT_PENILAIAN_STORAGE_KEY);
-    if (!storedConfig) {
-      window.localStorage.setItem(
-        BOBOT_PENILAIAN_STORAGE_KEY,
-        JSON.stringify(defaultBobotPenilaianConfig)
-      );
-      return;
-    }
+    const loadConfig = async () => {
+      try {
+        const response = await apiRequest<{ data: BackendGradeWeight[] }>('/grade-weights');
+        const activeConfig = response.data[0];
 
-    try {
-      const parsedConfig = JSON.parse(storedConfig) as typeof defaultBobotPenilaianConfig;
-      if (Array.isArray(parsedConfig.bobot) && Array.isArray(parsedConfig.gradeRanges)) {
-        setBobotPenilaian(parsedConfig.bobot);
-        setGradeRanges(parsedConfig.gradeRanges);
+        if (activeConfig) {
+          setRecordId(activeConfig.id);
+          setBobotPenilaian(activeConfig.components ?? []);
+          setGradeRanges(activeConfig.grade_ranges ?? []);
+        }
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal memuat bobot penilaian dari backend.',
+          'error'
+        );
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      window.localStorage.setItem(
-        BOBOT_PENILAIAN_STORAGE_KEY,
-        JSON.stringify(defaultBobotPenilaianConfig)
-      );
-    }
+    };
+
+    void loadConfig();
   }, []);
 
   const totalBobot = useMemo(
@@ -93,6 +110,11 @@ export default function BobotPenilaianPage() {
       return;
     }
 
+    if (!bobotPenilaian.length || !gradeRanges.length) {
+      showToast('Konfigurasi bobot belum tersedia di database.', 'error');
+      return;
+    }
+
     const hasInvalidRange = gradeRanges.some(
       (item) => item.nilaiMinimum > item.nilaiMaksimum
     );
@@ -106,11 +128,32 @@ export default function BobotPenilaianPage() {
       gradeRanges: [...gradeRanges].sort((a, b) => b.nilaiMinimum - a.nilaiMinimum),
     };
 
-    window.localStorage.setItem(
-      BOBOT_PENILAIAN_STORAGE_KEY,
-      JSON.stringify(normalizedConfig)
-    );
-    showToast('Bobot penilaian berhasil disimpan!', 'success');
+    const legacyWeights = deriveLegacyWeights(normalizedConfig.bobot);
+
+    void (async () => {
+      try {
+        const response = await apiRequest<{ message: string; data: BackendGradeWeight }>(
+          recordId ? `/grade-weights/${recordId}` : '/grade-weights',
+          {
+            method: recordId ? 'PUT' : 'POST',
+            body: {
+              title: 'Konfigurasi Bobot Penilaian',
+              ...legacyWeights,
+              components: normalizedConfig.bobot,
+              grade_ranges: normalizedConfig.gradeRanges,
+            },
+          }
+        );
+
+        setRecordId(response.data.id);
+        showToast(response.message, 'success');
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal menyimpan bobot penilaian.',
+          'error'
+        );
+      }
+    })();
   };
 
   return (
@@ -133,7 +176,8 @@ export default function BobotPenilaianPage() {
         </div>
         <button
           onClick={handleSave}
-          className="flex items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-6 py-3 font-medium text-white shadow-md transition-all hover:bg-blue-700"
+          disabled={isLoading}
+          className="flex items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-6 py-3 font-medium text-white shadow-md transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Save size={20} />
           <span>Simpan Pengaturan</span>
@@ -154,34 +198,40 @@ export default function BobotPenilaianPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            {bobotPenilaian.map((item) => (
-              <div
-                key={item.id}
-                className="grid gap-3 rounded-xl border border-gray-200 p-4 md:grid-cols-[1fr_180px]"
-              >
-                <div>
-                  <p className="font-medium text-gray-900">{item.jenisPenilaian}</p>
-                  <p className="text-sm text-gray-500">
-                    Digunakan saat guru mapel input nilai {item.jenisPenilaian.toLowerCase()}.
-                  </p>
+          {isLoading ? (
+            <div className="py-10 text-center text-sm text-gray-500">
+              Memuat bobot penilaian dari backend...
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {bobotPenilaian.map((item) => (
+                <div
+                  key={item.id}
+                  className="grid gap-3 rounded-xl border border-gray-200 p-4 md:grid-cols-[1fr_180px]"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{item.jenisPenilaian}</p>
+                    <p className="text-sm text-gray-500">
+                      Digunakan saat guru mapel input nilai {item.jenisPenilaian.toLowerCase()}.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                      Bobot (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={item.bobot}
+                      onChange={(e) => handleBobotChange(item.id, e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Bobot (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={item.bobot}
-                    onChange={(e) => handleBobotChange(item.id, e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">

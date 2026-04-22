@@ -5,54 +5,65 @@ import { Search, Plus, Edit, Trash2, X, CalendarRange, CheckCircle2 } from 'luci
 import { AnimatePresence, motion } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
-import {
-  defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
-  type TahunAjaranItem as TahunAjaran,
-} from '../../lib/tahunAjaranStore';
+import { apiRequest } from '../../lib/api';
+import { type TahunAjaranItem as TahunAjaran } from '../../lib/masterDataTypes';
+
+interface BackendAcademicYear {
+  id: number;
+  name: string;
+  semester: 'Ganjil' | 'Genap';
+  start_date: string | null;
+  end_date: string | null;
+  status: 'Aktif' | 'Draft' | 'Arsip';
+  is_active: boolean;
+}
+
+const defaultFormData = {
+  nama: '',
+  semester: 'Ganjil' as 'Ganjil' | 'Genap',
+  tanggalMulai: '',
+  tanggalSelesai: '',
+  status: 'Draft' as 'Aktif' | 'Draft' | 'Arsip',
+};
+
+const normalizeDate = (value: string | null) => (value ? value.slice(0, 10) : '');
+
+const mapAcademicYearToViewModel = (item: BackendAcademicYear): TahunAjaran => ({
+  id: item.id,
+  nama: item.name,
+  semester: item.semester,
+  tanggalMulai: normalizeDate(item.start_date),
+  tanggalSelesai: normalizeDate(item.end_date),
+  status: item.status ?? (item.is_active ? 'Aktif' : 'Draft'),
+});
 
 export default function TahunAjaranPage() {
-  const [tahunAjaran, setTahunAjaran] = useState<TahunAjaran[]>(defaultTahunAjaranData);
+  const [tahunAjaran, setTahunAjaran] = useState<TahunAjaran[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<TahunAjaran | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { toasts, showToast, removeToast } = useToast();
 
-  const [formData, setFormData] = useState({
-    nama: '',
-    semester: 'Ganjil' as 'Ganjil' | 'Genap',
-    tanggalMulai: '',
-    tanggalSelesai: '',
-    status: 'Draft' as 'Aktif' | 'Draft' | 'Arsip',
-  });
+  const [formData, setFormData] = useState(defaultFormData);
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaran[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaran(parsedData);
+    const loadAcademicYears = async () => {
+      try {
+        const response = await apiRequest<{ data: BackendAcademicYear[] }>('/academic-years');
+        setTahunAjaran(response.data.map(mapAcademicYearToViewModel));
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal memuat tahun ajaran dari backend.',
+          'error'
+        );
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
-  }, []);
+    };
 
-  const syncTahunAjaran = (nextTahunAjaran: TahunAjaran[]) => {
-    setTahunAjaran(nextTahunAjaran);
-    window.localStorage.setItem(TAHUN_AJARAN_STORAGE_KEY, JSON.stringify(nextTahunAjaran));
-  };
+    void loadAcademicYears();
+  }, []);
 
   const filteredData = tahunAjaran.filter(
     (item) =>
@@ -62,13 +73,7 @@ export default function TahunAjaranPage() {
   );
 
   const resetForm = () => {
-    setFormData({
-      nama: '',
-      semester: 'Ganjil',
-      tanggalMulai: '',
-      tanggalSelesai: '',
-      status: 'Draft',
-    });
+    setFormData(defaultFormData);
   };
 
   const handleAdd = () => {
@@ -90,38 +95,110 @@ export default function TahunAjaranPage() {
   };
 
   const handleDelete = (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus tahun ajaran ini?')) {
-      syncTahunAjaran(tahunAjaran.filter((item) => item.id !== id));
-      showToast('Tahun ajaran berhasil dihapus!', 'success');
+    if (!confirm('Apakah Anda yakin ingin menghapus tahun ajaran ini?')) {
+      return;
     }
+
+    void (async () => {
+      try {
+        const response = await apiRequest<{ message: string }>(`/academic-years/${id}`, {
+          method: 'DELETE',
+        });
+        setTahunAjaran((currentItems) => currentItems.filter((item) => item.id !== id));
+        showToast(response.message, 'success');
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal menghapus tahun ajaran.',
+          'error'
+        );
+      }
+    })();
   };
 
-  const handleSetActive = (id: number) => {
-    syncTahunAjaran(
-      tahunAjaran.map((item) => ({
-        ...item,
-        status: item.id === id ? 'Aktif' : item.status === 'Aktif' ? 'Arsip' : item.status,
-      }))
-    );
-    showToast('Tahun ajaran aktif berhasil diperbarui!', 'success');
+  const handleSetActive = (item: TahunAjaran) => {
+    void (async () => {
+      try {
+        const response = await apiRequest<{ message: string; data: BackendAcademicYear }>(
+          `/academic-years/${item.id}`,
+          {
+            method: 'PUT',
+            body: {
+              name: item.nama,
+              semester: item.semester,
+              start_date: item.tanggalMulai || null,
+              end_date: item.tanggalSelesai || null,
+              status: 'Aktif',
+            },
+          }
+        );
+
+        setTahunAjaran((currentItems) =>
+          currentItems.map((currentItem) =>
+            currentItem.id === item.id
+              ? mapAcademicYearToViewModel(response.data)
+              : {
+                  ...currentItem,
+                  status: currentItem.status === 'Aktif' ? 'Arsip' : currentItem.status,
+                }
+          )
+        );
+        showToast(response.message, 'success');
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal mengaktifkan tahun ajaran.',
+          'error'
+        );
+      }
+    })();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (editingItem) {
-      syncTahunAjaran(
-        tahunAjaran.map((item) =>
-          item.id === editingItem.id ? { ...formData, id: item.id } : item
-        )
-      );
-      showToast('Tahun ajaran berhasil diperbarui!', 'success');
-    } else {
-      syncTahunAjaran([...tahunAjaran, { ...formData, id: Date.now() }]);
-      showToast('Tahun ajaran berhasil ditambahkan!', 'success');
-    }
+    const payload = {
+      name: formData.nama,
+      semester: formData.semester,
+      start_date: formData.tanggalMulai || null,
+      end_date: formData.tanggalSelesai || null,
+      status: formData.status,
+    };
 
-    setShowModal(false);
+    try {
+      if (editingItem) {
+        const response = await apiRequest<{ message: string; data: BackendAcademicYear }>(
+          `/academic-years/${editingItem.id}`,
+          {
+            method: 'PUT',
+            body: payload,
+          }
+        );
+
+        setTahunAjaran((currentItems) =>
+          currentItems.map((item) =>
+            item.id === editingItem.id ? mapAcademicYearToViewModel(response.data) : item
+          )
+        );
+        showToast(response.message, 'success');
+      } else {
+        const response = await apiRequest<{ message: string; data: BackendAcademicYear }>(
+          '/academic-years',
+          {
+            method: 'POST',
+            body: payload,
+          }
+        );
+
+        setTahunAjaran((currentItems) => [...currentItems, mapAcademicYearToViewModel(response.data)]);
+        showToast(response.message, 'success');
+      }
+
+      setShowModal(false);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Gagal menyimpan tahun ajaran.',
+        'error'
+      );
+    }
   };
 
   return (
@@ -163,8 +240,15 @@ export default function TahunAjaranPage() {
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        {filteredData.length === 0 ? (
-          <EmptyState message="Tidak ada data tahun ajaran" description="Silakan tambahkan periode baru" />
+        {isLoading ? (
+          <div className="px-6 py-10 text-center text-sm text-gray-500">
+            Memuat tahun ajaran dari backend...
+          </div>
+        ) : filteredData.length === 0 ? (
+          <EmptyState
+            message="Tidak ada data tahun ajaran"
+            description="Silakan tambahkan periode baru"
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -190,7 +274,7 @@ export default function TahunAjaranPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-700">{item.semester}</td>
                     <td className="px-6 py-4 text-sm text-gray-700">
-                      {item.tanggalMulai} s/d {item.tanggalSelesai}
+                      {item.tanggalMulai || '-'} s/d {item.tanggalSelesai || '-'}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span
@@ -198,8 +282,8 @@ export default function TahunAjaranPage() {
                           item.status === 'Aktif'
                             ? 'bg-green-100 text-green-700'
                             : item.status === 'Draft'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-gray-100 text-gray-700'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-gray-100 text-gray-700'
                         }`}
                       >
                         {item.status}
@@ -209,7 +293,7 @@ export default function TahunAjaranPage() {
                       <div className="flex items-center justify-end gap-2">
                         {item.status !== 'Aktif' && (
                           <button
-                            onClick={() => handleSetActive(item.id)}
+                            onClick={() => handleSetActive(item)}
                             className="rounded-lg p-2 text-green-600 transition-colors hover:bg-green-50"
                             title="Jadikan Aktif"
                           >
@@ -296,7 +380,6 @@ export default function TahunAjaranPage() {
                     <label className="mb-2 block text-sm font-medium text-gray-700">Tanggal Mulai</label>
                     <input
                       type="date"
-                      required
                       value={formData.tanggalMulai}
                       onChange={(e) => setFormData({ ...formData, tanggalMulai: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
@@ -306,7 +389,6 @@ export default function TahunAjaranPage() {
                     <label className="mb-2 block text-sm font-medium text-gray-700">Tanggal Selesai</label>
                     <input
                       type="date"
-                      required
                       value={formData.tanggalSelesai}
                       onChange={(e) => setFormData({ ...formData, tanggalSelesai: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"

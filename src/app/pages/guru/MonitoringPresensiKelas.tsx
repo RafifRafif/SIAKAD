@@ -1,49 +1,44 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { BellRing, CalendarDays, ClipboardList } from 'lucide-react';
-
-const rekapPresensi = [
-  {
-    id: 1,
-    nama: 'Ahmad Fauzi',
-    nis: '2024001',
-    mapel: 'Matematika',
-    tanggal: '2026-04-20',
-    status: 'Hadir',
-    keterangan: '-',
-  },
-  {
-    id: 2,
-    nama: 'Siti Nurhaliza',
-    nis: '2024002',
-    mapel: 'Matematika',
-    tanggal: '2026-04-20',
-    status: 'Tidak Hadir',
-    keterangan: 'Izin sakit',
-  },
-  {
-    id: 3,
-    nama: 'Muhammad Rizki',
-    nis: '2024003',
-    mapel: 'Bahasa Inggris',
-    tanggal: '2026-04-20',
-    status: 'Hadir',
-    keterangan: '-',
-  },
-  {
-    id: 4,
-    nama: 'Fatimah Azzahra',
-    nis: '2024004',
-    mapel: 'Bahasa Inggris',
-    tanggal: '2026-04-20',
-    status: 'Tidak Hadir',
-    keterangan: 'Keperluan keluarga',
-  },
-];
+import { EmptyState } from '../../components/dashboard/EmptyState';
+import { formatTanggalIndonesia, getAttendanceRecords, getCurrentAuthProfile, type BackendAttendanceRecord, type BackendSchoolClass } from '../../lib/guruData';
 
 export default function MonitoringPresensiKelas() {
+  const [homeroomClasses, setHomeroomClasses] = useState<BackendSchoolClass[]>([]);
+  const [records, setRecords] = useState<BackendAttendanceRecord[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      const profile = await getCurrentAuthProfile();
+      const classes = profile?.dashboard_context?.homeroom_classes ?? [];
+      setHomeroomClasses(classes);
+
+      const responses = await Promise.all(classes.map((item) => getAttendanceRecords({ classId: item.id })));
+      setRecords(responses.flat());
+    };
+
+    void loadData();
+  }, []);
+
+  const rekapPresensi = useMemo(
+    () =>
+      records.map((item) => ({
+        id: item.id,
+        nama: item.student?.name ?? '-',
+        nis: item.student?.nis ?? '-',
+        mapel: item.subject?.name ?? '-',
+        tanggal: item.attendance_date,
+        status: item.status,
+        keterangan: item.notes ?? '-',
+      })),
+    [records]
+  );
+
   const totalTidakHadir = rekapPresensi.filter((item) => item.status === 'Tidak Hadir').length;
+  const tanggalMonitoring = rekapPresensi[0]?.tanggal ? formatTanggalIndonesia(rekapPresensi[0].tanggal) : '-';
 
   return (
     <div className="space-y-6">
@@ -66,7 +61,7 @@ export default function MonitoringPresensiKelas() {
             <CalendarDays size={20} />
           </div>
           <p className="text-sm text-gray-600">Tanggal Monitoring</p>
-          <p className="mt-1 text-xl font-bold text-gray-900">20 April 2026</p>
+          <p className="mt-1 text-xl font-bold text-gray-900">{tanggalMonitoring}</p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-3 inline-flex rounded-lg bg-green-100 p-3 text-green-600">
@@ -96,42 +91,39 @@ export default function MonitoringPresensiKelas() {
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px]">
-            <thead className="border-b border-gray-200 bg-gray-50">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Siswa</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">NIS</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Tanggal</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Keterangan</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {rekapPresensi.map((item) => (
-                <tr key={item.id} className="transition-colors hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.nama}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.nis}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.tanggal}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span
-                      className={`rounded-full px-3 py-1 font-medium ${
-                        item.status === 'Hadir'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">{item.keterangan}</td>
+        {rekapPresensi.length === 0 ? (
+          <EmptyState
+            message="Belum ada rekap presensi"
+            description="Data presensi murid dari guru mata pelajaran akan tampil di sini setelah tersedia."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px]">
+              <thead className="border-b border-gray-200 bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Siswa</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">NIS</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Tanggal</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Keterangan</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {rekapPresensi.map((item) => (
+                  <tr key={item.id} className="transition-colors hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.nama}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.nis}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{formatTanggalIndonesia(item.tanggal)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.status}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.keterangan}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </motion.div>
     </div>
   );

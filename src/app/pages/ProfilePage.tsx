@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, Eye, EyeOff, KeyRound, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../components/dashboard/Toast';
@@ -13,11 +13,50 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import { Button } from '../components/ui/button';
+import { apiRequest } from '../lib/api';
+import { getAuthState, type AuthState } from '../lib/auth';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000/api/v1';
+
+type ProfileResponse = {
+  id: number;
+  name: string;
+  username: string;
+  email: string | null;
+  phone: string | null;
+  role: AuthState['role'];
+  profile_photo_url: string | null;
+  student: {
+    nis: string;
+    class?: {
+      name: string;
+    } | null;
+  } | null;
+  teacher: {
+    nip: string;
+  } | null;
+};
+
+const roleLabels = {
+  admin: 'Admin',
+  'guru-kelas': 'Guru Kelas',
+  'guru-mapel': 'Guru Mapel',
+  siswa: 'Siswa',
+};
 
 export default function ProfilePage() {
   const { toasts, showToast, removeToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [authState, setAuthState] = useState<AuthState | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [profileIdentity, setProfileIdentity] = useState({
+    roleLabel: 'Pengguna',
+    identifierLabel: 'ID',
+    identifierValue: '-',
+    classLabel: '-',
+  });
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [formData, setFormData] = useState({
     nama: 'Muhammad Rizki',
     email: 'rizki@example.com',
@@ -36,10 +75,31 @@ export default function ProfilePage() {
     confirmPassword: false,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast('Profile berhasil diupdate!', 'success');
-    setIsEditing(false);
+
+    if (!authState?.username) {
+      showToast('Silakan login ulang terlebih dahulu.', 'error');
+      return;
+    }
+
+    try {
+      const response = await apiRequest<{ data: ProfileResponse }>('/auth/profile', {
+        method: 'POST',
+        body: {
+          username: authState.username,
+          name: formData.nama,
+          email: formData.email || null,
+          phone: formData.telepon || null,
+        },
+      });
+
+      setProfilePhotoUrl(response.data.profile_photo_url);
+      showToast('Profile berhasil diupdate!', 'success');
+      setIsEditing(false);
+    } catch {
+      showToast('Gagal menyimpan profil ke backend.', 'error');
+    }
   };
 
   const resetPasswordForm = () => {
@@ -54,6 +114,64 @@ export default function ProfilePage() {
       confirmPassword: false,
     });
   };
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const currentAuthState = getAuthState();
+    if (currentAuthState) {
+      setAuthState(currentAuthState);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authState?.username) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadProfile = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/auth/me?username=${encodeURIComponent(authState.username)}`,
+          {
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Gagal mengambil profil.');
+        }
+
+        const payload = (await response.json()) as { data: ProfileResponse };
+        const user = payload.data;
+
+        setFormData((current) => ({
+          ...current,
+          nama: user.name,
+          email: user.email ?? '',
+          telepon: user.phone ?? '',
+        }));
+        setProfilePhotoUrl(user.profile_photo_url);
+        setProfileIdentity({
+          roleLabel: roleLabels[user.role] ?? 'Pengguna',
+          identifierLabel: user.student ? 'NIS' : user.teacher ? 'NIP' : 'Username',
+          identifierValue: user.student?.nis ?? user.teacher?.nip ?? user.username,
+          classLabel: user.student?.class?.name
+            ? `${roleLabels[user.role]} - ${user.student.class.name}`
+            : roleLabels[user.role] ?? 'Pengguna',
+        });
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          showToast('Gagal memuat profil dari backend.', 'error');
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => controller.abort();
+  }, [authState, showToast]);
 
   const togglePasswordVisibility = (
     field: 'currentPassword' | 'newPassword' | 'confirmPassword',
@@ -64,7 +182,7 @@ export default function ProfilePage() {
     }));
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (
@@ -86,9 +204,88 @@ export default function ProfilePage() {
       return;
     }
 
-    showToast('Password berhasil diperbarui!', 'success');
-    resetPasswordForm();
-    setIsPasswordModalOpen(false);
+    if (!authState?.username) {
+      showToast('Silakan login ulang terlebih dahulu.', 'error');
+      return;
+    }
+
+    try {
+      await apiRequest('/auth/password', {
+        method: 'POST',
+        body: {
+          username: authState.username,
+          current_password: passwordData.currentPassword,
+          new_password: passwordData.newPassword,
+          new_password_confirmation: passwordData.confirmPassword,
+        },
+      });
+
+      showToast('Password berhasil diperbarui!', 'success');
+      resetPasswordForm();
+      setIsPasswordModalOpen(false);
+    } catch {
+      showToast('Gagal memperbarui password.', 'error');
+    }
+  };
+
+  const getInitials = () =>
+    formData.nama
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? '')
+      .join('') || 'U';
+
+  const uploadProfilePhoto = async (file: File) => {
+    if (!authState?.username) {
+      showToast('Silakan login ulang terlebih dahulu.', 'error');
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+
+    try {
+      const payload = new FormData();
+      payload.append('username', authState.username);
+      payload.append('name', formData.nama);
+      if (formData.email.trim()) {
+        payload.append('email', formData.email.trim());
+      }
+      if (formData.telepon.trim()) {
+        payload.append('phone', formData.telepon.trim());
+      }
+      payload.append('profile_photo', file);
+
+      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+        method: 'POST',
+        body: payload,
+      });
+
+      if (!response.ok) {
+        throw new Error('Gagal mengunggah foto profil.');
+      }
+
+      const result = (await response.json()) as { data: ProfileResponse };
+      setProfilePhotoUrl(result.data.profile_photo_url);
+      showToast('Foto profil berhasil diperbarui!', 'success');
+    } catch {
+      showToast('Upload foto profil gagal. Pastikan backend aktif.', 'error');
+    } finally {
+      setIsUploadingPhoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handlePhotoSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    await uploadProfilePhoto(file);
   };
 
   return (
@@ -116,19 +313,39 @@ export default function ProfilePage() {
         >
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
             <div className="relative inline-block mb-4">
-              <div className="w-32 h-32 bg-gradient-to-br from-[#2563EB] to-blue-400 rounded-full flex items-center justify-center text-white text-4xl font-bold">
-                MR
-              </div>
-              <button className="absolute bottom-0 right-0 w-10 h-10 bg-[#2563EB] rounded-full flex items-center justify-center text-white shadow-lg hover:bg-blue-700 transition-colors">
+              {profilePhotoUrl ? (
+                <img
+                  src={profilePhotoUrl}
+                  alt="Foto profil"
+                  className="h-32 w-32 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-32 h-32 bg-gradient-to-br from-[#2563EB] to-blue-400 rounded-full flex items-center justify-center text-white text-4xl font-bold">
+                  {getInitials()}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingPhoto}
+                className="absolute bottom-0 right-0 w-10 h-10 bg-[#2563EB] rounded-full flex items-center justify-center text-white shadow-lg hover:bg-blue-700 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              >
                 <Camera size={20} />
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoSelection}
+                className="hidden"
+              />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-1">{formData.nama}</h3>
-            <p className="text-gray-600 mb-4">Siswa - Kelas XI-B</p>
+            <p className="text-gray-600 mb-4">{profileIdentity.classLabel}</p>
             <div className="pt-4 border-t border-gray-200 space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">NIS:</span>
-                <span className="font-medium text-gray-900">2024003</span>
+                <span className="text-gray-600">{profileIdentity.identifierLabel}:</span>
+                <span className="font-medium text-gray-900">{profileIdentity.identifierValue}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Status:</span>

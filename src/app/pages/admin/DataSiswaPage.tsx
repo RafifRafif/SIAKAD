@@ -5,88 +5,129 @@ import { Search, Plus, Edit, Trash2, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
-import { defaultSiswaData, SISWA_STORAGE_KEY, type StudentItem as Student } from '../../lib/siswaStore';
-import {
-  defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
-  type TahunAjaranItem,
-} from '../../lib/tahunAjaranStore';
+import { apiRequest } from '../../lib/api';
+import { type StudentItem as Student, type TahunAjaranItem } from '../../lib/masterDataTypes';
+
+interface BackendAcademicYear {
+  id: number;
+  name: string;
+  semester: 'Ganjil' | 'Genap';
+  is_active: boolean;
+}
+
+interface BackendClass {
+  id: number;
+  name: string;
+  level: 'X' | 'XI' | 'XII';
+}
+
+interface BackendStudent {
+  id: number;
+  nis: string;
+  name: string;
+  gender: string;
+  email: string | null;
+  phone: string | null;
+  academic_year_id: number | null;
+  class_id: number | null;
+  academic_year?: BackendAcademicYear | null;
+  class?: BackendClass | null;
+}
+
+const defaultFormData = {
+  nis: '',
+  nama: '',
+  tahunAjaran: '',
+  kelas: '',
+  jenisKelamin: 'Laki-laki',
+  email: '',
+  telepon: '',
+};
+
+const mapAcademicYearToOption = (item: BackendAcademicYear): TahunAjaranItem => ({
+  id: item.id,
+  nama: item.name,
+  semester: item.semester,
+  tanggalMulai: '',
+  tanggalSelesai: '',
+  status: item.is_active ? 'Aktif' : 'Draft',
+});
+
+const mapStudentToViewModel = (student: BackendStudent): Student => ({
+  id: student.id,
+  nis: student.nis,
+  nama: student.name,
+  tahunAjaran: student.academic_year
+    ? `${student.academic_year.name} ${student.academic_year.semester}`
+    : '',
+  kelas: student.class?.name ?? '',
+  jenisKelamin: student.gender,
+  email: student.email ?? '',
+  telepon: student.phone ?? '',
+});
 
 export default function DataSiswaPage() {
-  const [students, setStudents] = useState<Student[]>(defaultSiswaData);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [classOptions, setClassOptions] = useState<BackendClass[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterKelas, setFilterKelas] = useState('all');
   const [filterTahunAjaran, setFilterTahunAjaran] = useState('all');
-  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
-    defaultTahunAjaranData
-  );
+  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const itemsPerPage = 5;
   const { toasts, showToast, removeToast } = useToast();
 
-  const [formData, setFormData] = useState({
-    nis: '',
-    nama: '',
-    tahunAjaran: '2025/2026 Genap',
-    kelas: 'X-A',
-    jenisKelamin: 'Laki-laki',
-    email: '',
-    telepon: '',
-  });
-
-  useEffect(() => {
-    const storedData = window.localStorage.getItem(SISWA_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(defaultSiswaData));
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as Student[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setStudents(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(defaultSiswaData));
-    }
-  }, []);
-
-  useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaranOptions(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
-  }, []);
+  const [formData, setFormData] = useState(defaultFormData);
 
   const tahunAjaranList = useMemo(
     () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
     [tahunAjaranOptions]
   );
 
-  const syncStudents = (nextStudents: Student[]) => {
-    setStudents(nextStudents);
-    window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(nextStudents));
-  };
+  const kelasList = useMemo(
+    () => ['all', ...classOptions.map((schoolClass) => schoolClass.name)],
+    [classOptions]
+  );
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [studentsResponse, academicYearsResponse, classesResponse] = await Promise.all([
+          apiRequest<{ data: BackendStudent[] }>('/students'),
+          apiRequest<{ data: BackendAcademicYear[] }>('/academic-years'),
+          apiRequest<{ data: BackendClass[] }>('/classes'),
+        ]);
+
+        setStudents(studentsResponse.data.map(mapStudentToViewModel));
+        setTahunAjaranOptions(academicYearsResponse.data.map(mapAcademicYearToOption));
+        setClassOptions(classesResponse.data);
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal memuat data siswa dari backend.',
+          'error'
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadData();
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterKelas, filterTahunAjaran]);
+
+  const resolveAcademicYearId = (tahunAjaran: string) =>
+    tahunAjaranOptions.find((item) => `${item.nama} ${item.semester}` === tahunAjaran)?.id ?? null;
+
+  const resolveClassId = (kelas: string) =>
+    classOptions.find((item) => item.name === kelas)?.id ?? null;
 
   // Filter students
   const filteredStudents = students.filter((student) => {
@@ -107,13 +148,9 @@ export default function DataSiswaPage() {
   const handleAdd = () => {
     setEditingStudent(null);
     setFormData({
-      nis: '',
-      nama: '',
-      tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
-      kelas: 'X-A',
-      jenisKelamin: 'Laki-laki',
-      email: '',
-      telepon: '',
+      ...defaultFormData,
+      tahunAjaran: tahunAjaranList[1] ?? '',
+      kelas: kelasList[1] ?? '',
     });
     setShowModal(true);
   };
@@ -140,28 +177,81 @@ export default function DataSiswaPage() {
   };
 
   const handleDelete = (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus siswa ini?')) {
-      syncStudents(students.filter((s) => s.id !== id));
-      showToast('Siswa berhasil dihapus!', 'success');
+    if (!confirm('Apakah Anda yakin ingin menghapus siswa ini?')) {
+      return;
     }
+
+    void (async () => {
+      try {
+        const response = await apiRequest<{ message: string }>(`/students/${id}`, {
+          method: 'DELETE',
+        });
+        setStudents((currentStudents) => currentStudents.filter((student) => student.id !== id));
+        showToast(response.message, 'success');
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal menghapus data siswa.',
+          'error'
+        );
+      }
+    })();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingStudent) {
-      syncStudents(
-        students.map((s) => (s.id === editingStudent.id ? { ...formData, id: s.id } : s))
-      );
-      showToast('Data siswa berhasil diupdate!', 'success');
-    } else {
-      const newStudent = { ...formData, id: Date.now() };
-      syncStudents([...students, newStudent]);
-      showToast('Siswa baru berhasil ditambahkan!', 'success');
-    }
-    setShowModal(false);
-  };
 
-  const kelasList = ['all', 'X-A', 'X-B', 'XI-A', 'XI-B', 'XII-A', 'XII-B'];
+    const payload = {
+      nis: formData.nis,
+      name: formData.nama,
+      academic_year_id: resolveAcademicYearId(formData.tahunAjaran),
+      class_id: resolveClassId(formData.kelas),
+      gender: formData.jenisKelamin,
+      email: formData.email || null,
+      phone: formData.telepon || null,
+    };
+
+    try {
+      if (editingStudent) {
+        const response = await apiRequest<{ message: string; data: BackendStudent }>(
+          `/students/${editingStudent.id}`,
+          {
+            method: 'PUT',
+            body: payload,
+          }
+        );
+
+        if (!response?.data) {
+          throw new Error('Data siswa dari backend tidak lengkap.');
+        }
+
+        setStudents((currentStudents) =>
+          currentStudents.map((student) =>
+            student.id === editingStudent.id ? mapStudentToViewModel(response.data) : student
+          )
+        );
+        showToast(response.message, 'success');
+      } else {
+        const response = await apiRequest<{ message: string; data: BackendStudent }>('/students', {
+          method: 'POST',
+          body: payload,
+        });
+
+        if (!response?.data) {
+          throw new Error('Data siswa dari backend tidak lengkap.');
+        }
+
+        setStudents((currentStudents) => [...currentStudents, mapStudentToViewModel(response.data)]);
+        showToast(response.message, 'success');
+      }
+
+      setShowModal(false);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Gagal menyimpan data siswa.',
+        'error'
+      );
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -246,7 +336,11 @@ export default function DataSiswaPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        {paginatedStudents.length === 0 ? (
+        {isLoading ? (
+          <div className="px-6 py-10 text-center text-sm text-gray-500">
+            Memuat data siswa dari backend...
+          </div>
+        ) : paginatedStudents.length === 0 ? (
           <EmptyState message="Tidak ada data siswa" description="Silakan tambahkan siswa baru" />
         ) : (
           <>

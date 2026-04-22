@@ -5,81 +5,74 @@ import { Search, Plus, Edit, Trash2, X, BookOpen } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
-import {
-  defaultMasterPelajaran,
-  MASTER_PELAJARAN_STORAGE_KEY,
-  type MasterPelajaran,
-} from '../../lib/pelajaranStore';
-import {
-  defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
-  type TahunAjaranItem,
-} from '../../lib/tahunAjaranStore';
+import { apiRequest } from '../../lib/api';
+import { type MasterPelajaran, type TahunAjaranItem } from '../../lib/masterDataTypes';
+
+interface BackendAcademicYear {
+  id: number;
+  name: string;
+  semester: 'Ganjil' | 'Genap';
+  is_active: boolean;
+}
+
+interface BackendSubject {
+  id: number;
+  name: string;
+  academic_year?: BackendAcademicYear | null;
+}
+
+const defaultFormData = {
+  nama: '',
+  tahunAjaran: '',
+};
+
+const mapAcademicYearToOption = (item: BackendAcademicYear): TahunAjaranItem => ({
+  id: item.id,
+  nama: item.name,
+  semester: item.semester,
+  tanggalMulai: '',
+  tanggalSelesai: '',
+  status: item.is_active ? 'Aktif' : 'Draft',
+});
+
+const mapSubjectToViewModel = (item: BackendSubject): MasterPelajaran => ({
+  id: item.id,
+  nama: item.name,
+  tahunAjaran: item.academic_year ? `${item.academic_year.name} ${item.academic_year.semester}` : '',
+});
 
 export default function MasterPelajaranPage() {
-  const [pelajaran, setPelajaran] = useState<MasterPelajaran[]>(defaultMasterPelajaran);
+  const [pelajaran, setPelajaran] = useState<MasterPelajaran[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTahunAjaran, setFilterTahunAjaran] = useState('all');
-  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
-    defaultTahunAjaranData
-  );
+  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingPelajaran, setEditingPelajaran] = useState<MasterPelajaran | null>(null);
-  const [formData, setFormData] = useState({
-    nama: '',
-    tahunAjaran: '2025/2026 Genap',
-  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [formData, setFormData] = useState(defaultFormData);
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(MASTER_PELAJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        MASTER_PELAJARAN_STORAGE_KEY,
-        JSON.stringify(defaultMasterPelajaran)
-      );
-      return;
-    }
+    const loadData = async () => {
+      try {
+        const [subjectsResponse, academicYearsResponse] = await Promise.all([
+          apiRequest<{ data: BackendSubject[] }>('/subjects'),
+          apiRequest<{ data: BackendAcademicYear[] }>('/academic-years'),
+        ]);
 
-    try {
-      const parsedData = JSON.parse(storedData) as MasterPelajaran[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setPelajaran(parsedData);
+        setPelajaran(subjectsResponse.data.map(mapSubjectToViewModel));
+        setTahunAjaranOptions(academicYearsResponse.data.map(mapAcademicYearToOption));
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal memuat data pelajaran dari backend.',
+          'error'
+        );
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
-      window.localStorage.setItem(
-        MASTER_PELAJARAN_STORAGE_KEY,
-        JSON.stringify(defaultMasterPelajaran)
-      );
-    }
-  }, []);
+    };
 
-  const syncPelajaran = (nextPelajaran: MasterPelajaran[]) => {
-    setPelajaran(nextPelajaran);
-    window.localStorage.setItem(MASTER_PELAJARAN_STORAGE_KEY, JSON.stringify(nextPelajaran));
-  };
-
-  useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaranOptions(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
+    void loadData();
   }, []);
 
   const tahunAjaranList = useMemo(
@@ -96,8 +89,8 @@ export default function MasterPelajaranPage() {
   const handleAdd = () => {
     setEditingPelajaran(null);
     setFormData({
-      nama: '',
-      tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
+      ...defaultFormData,
+      tahunAjaran: tahunAjaranList[1] ?? '',
     });
     setShowModal(true);
   };
@@ -112,14 +105,27 @@ export default function MasterPelajaranPage() {
   };
 
   const handleDelete = (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus data pelajaran ini?')) {
-      const nextPelajaran = pelajaran.filter((item) => item.id !== id);
-      syncPelajaran(nextPelajaran);
-      showToast('Data pelajaran berhasil dihapus!', 'success');
+    if (!confirm('Apakah Anda yakin ingin menghapus data pelajaran ini?')) {
+      return;
     }
+
+    void (async () => {
+      try {
+        const response = await apiRequest<{ message: string }>(`/subjects/${id}`, {
+          method: 'DELETE',
+        });
+        setPelajaran((currentItems) => currentItems.filter((item) => item.id !== id));
+        showToast(response.message, 'success');
+      } catch (error) {
+        showToast(
+          error instanceof Error ? error.message : 'Gagal menghapus data pelajaran.',
+          'error'
+        );
+      }
+    })();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const trimmedNama = formData.nama.trim();
@@ -128,34 +134,49 @@ export default function MasterPelajaranPage() {
       return;
     }
 
-    const duplicatePelajaran = pelajaran.some(
-      (item) =>
-        item.nama.toLowerCase() === trimmedNama.toLowerCase() &&
-        item.id !== editingPelajaran?.id
-    );
-    if (duplicatePelajaran) {
-      showToast('Nama pelajaran sudah ada!', 'error');
-      return;
-    }
+    const academicYearId =
+      tahunAjaranOptions.find((item) => `${item.nama} ${item.semester}` === formData.tahunAjaran)
+        ?.id ?? null;
 
-    if (editingPelajaran) {
-      const nextPelajaran = pelajaran.map((item) =>
-        item.id === editingPelajaran.id
-          ? { ...item, nama: trimmedNama, tahunAjaran: formData.tahunAjaran }
-          : item
+    try {
+      if (editingPelajaran) {
+        const response = await apiRequest<{ message: string; data: BackendSubject }>(
+          `/subjects/${editingPelajaran.id}`,
+          {
+            method: 'PUT',
+            body: {
+              name: trimmedNama,
+              academic_year_id: academicYearId,
+            },
+          }
+        );
+
+        setPelajaran((currentItems) =>
+          currentItems.map((item) =>
+            item.id === editingPelajaran.id ? mapSubjectToViewModel(response.data) : item
+          )
+        );
+        showToast(response.message, 'success');
+      } else {
+        const response = await apiRequest<{ message: string; data: BackendSubject }>('/subjects', {
+          method: 'POST',
+          body: {
+            name: trimmedNama,
+            academic_year_id: academicYearId,
+          },
+        });
+
+        setPelajaran((currentItems) => [...currentItems, mapSubjectToViewModel(response.data)]);
+        showToast(response.message, 'success');
+      }
+
+      setShowModal(false);
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : 'Gagal menyimpan data pelajaran.',
+        'error'
       );
-      syncPelajaran(nextPelajaran);
-      showToast('Data pelajaran berhasil diperbarui!', 'success');
-    } else {
-      const nextPelajaran = [
-        ...pelajaran,
-        { id: Date.now(), nama: trimmedNama, tahunAjaran: formData.tahunAjaran },
-      ];
-      syncPelajaran(nextPelajaran);
-      showToast('Data pelajaran berhasil ditambahkan!', 'success');
     }
-
-    setShowModal(false);
   };
 
   return (
@@ -188,15 +209,15 @@ export default function MasterPelajaranPage() {
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="grid md:grid-cols-2 gap-4">
           <div className="relative">
-          <Search size={20} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Cari nama pelajaran..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 py-2 pr-4 pl-10 outline-none focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
-          />
-        </div>
+            <Search size={20} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari nama pelajaran..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 py-2 pr-4 pl-10 outline-none focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+            />
+          </div>
           <select
             value={filterTahunAjaran}
             onChange={(e) => setFilterTahunAjaran(e.target.value)}
@@ -212,7 +233,11 @@ export default function MasterPelajaranPage() {
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-        {filteredPelajaran.length === 0 ? (
+        {isLoading ? (
+          <div className="px-6 py-10 text-center text-sm text-gray-500">
+            Memuat data pelajaran dari backend...
+          </div>
+        ) : filteredPelajaran.length === 0 ? (
           <EmptyState
             message="Tidak ada data pelajaran"
             description="Silakan tambahkan master pelajaran baru"
