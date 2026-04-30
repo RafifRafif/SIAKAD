@@ -1,51 +1,41 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { FileText, Filter, GraduationCap } from 'lucide-react';
-import { EmptyState } from '../../components/dashboard/EmptyState';
-import { getCurrentAuthProfile, getGradeEntries, type BackendGradeEntry, type BackendSchoolClass } from '../../lib/guruData';
 
+const rekapNilaiData = [
+  { id: 1, nis: '2024001', nama: 'Ahmad Fauzi', mapel: 'Matematika', jenis: 'UTS', nilai: 88, guru: 'Ustadz Ahmad Fauzi' },
+  { id: 2, nis: '2024002', nama: 'Siti Nurhaliza', mapel: 'Matematika', jenis: 'UTS', nilai: 92, guru: 'Ustadz Ahmad Fauzi' },
+  { id: 3, nis: '2024001', nama: 'Ahmad Fauzi', mapel: 'Bahasa Inggris', jenis: 'Quiz', nilai: 84, guru: 'Ustadz Rizal' },
+  { id: 4, nis: '2024002', nama: 'Siti Nurhaliza', mapel: 'Bahasa Inggris', jenis: 'Quiz', nilai: 89, guru: 'Ustadz Rizal' },
+  { id: 5, nis: '2024003', nama: 'Muhammad Rizki', mapel: 'Fisika', jenis: 'Tugas', nilai: 78, guru: 'Ustadz Muhammad Rizki' },
+  { id: 6, nis: '2024004', nama: 'Fatimah Azzahra', mapel: 'Fisika', jenis: 'Tugas', nilai: 85, guru: 'Ustadz Muhammad Rizki' },
+  { id: 7, nis: '2024005', nama: 'Abdullah Rahman', mapel: 'Kimia', jenis: 'UAS', nilai: 81, guru: 'Ustadzah Nabila' },
+  { id: 8, nis: '2024003', nama: 'Muhammad Rizki', mapel: 'Kimia', jenis: 'UAS', nilai: 76, guru: 'Ustadzah Nabila' },
+];
+
+const mapelOptions = ['Semua Mata Pelajaran', 'Matematika', 'Bahasa Inggris', 'Fisika', 'Kimia'];
 const jenisOptions = ['Semua Jenis', 'UTS', 'UAS', 'Tugas', 'Quiz'];
 
 export default function RekapNilaiGuruKelas() {
-  const [entries, setEntries] = useState<BackendGradeEntry[]>([]);
   const [selectedMapel, setSelectedMapel] = useState('Semua Mata Pelajaran');
   const [selectedJenis, setSelectedJenis] = useState('Semua Jenis');
-  const [homeroomClasses, setHomeroomClasses] = useState<BackendSchoolClass[]>([]);
-
-  useEffect(() => {
-    const loadData = async () => {
-      const profile = await getCurrentAuthProfile();
-      const classes = profile?.dashboard_context?.homeroom_classes ?? [];
-      setHomeroomClasses(classes);
-
-      const responses = await Promise.all(classes.map((item) => getGradeEntries({ classId: item.id })));
-      setEntries(responses.flat());
-    };
-
-    void loadData();
-  }, []);
-
-  const mapelOptions = useMemo(
-    () => ['Semua Mata Pelajaran', ...Array.from(new Set(entries.map((item) => item.subject?.name).filter(Boolean)))],
-    [entries]
-  );
 
   const filteredNilai = useMemo(
     () =>
-      entries.filter((item) => {
+      rekapNilaiData.filter((item) => {
         const matchMapel =
-          selectedMapel === 'Semua Mata Pelajaran' || item.subject?.name === selectedMapel;
-        const matchJenis = selectedJenis === 'Semua Jenis' || item.assessment_type === selectedJenis;
+          selectedMapel === 'Semua Mata Pelajaran' || item.mapel === selectedMapel;
+        const matchJenis = selectedJenis === 'Semua Jenis' || item.jenis === selectedJenis;
         return matchMapel && matchJenis;
       }),
-    [entries, selectedJenis, selectedMapel]
+    [selectedMapel, selectedJenis]
   );
 
   const rataRata = useMemo(() => {
     if (filteredNilai.length === 0) return '0.00';
-    const total = filteredNilai.reduce((sum, item) => sum + item.score, 0);
+    const total = filteredNilai.reduce((sum, item) => sum + item.nilai, 0);
     return (total / filteredNilai.length).toFixed(2);
   }, [filteredNilai]);
 
@@ -135,39 +125,53 @@ export default function RekapNilaiGuruKelas() {
           </p>
         </div>
 
-        {filteredNilai.length === 0 ? (
-          <EmptyState
-            message="Belum ada rekap nilai"
-            description="Nilai murid dari guru mata pelajaran akan tampil di sini setelah tersedia."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px]">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Siswa</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">NIS</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Jenis</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Nilai</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Guru</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredNilai.map((item) => (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px]">
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">NIS</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Nama Siswa</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Jenis Penilaian</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Guru Mapel</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Nilai</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Grade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredNilai.map((item) => {
+                const grade =
+                  item.nilai >= 90 ? 'A' : item.nilai >= 80 ? 'B' : item.nilai >= 70 ? 'C' : item.nilai >= 60 ? 'D' : 'E';
+
+                return (
                   <tr key={item.id} className="transition-colors hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.student?.name ?? '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.student?.nis ?? '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.subject?.name ?? '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.assessment_type}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.score}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">-</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.nis}</td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.nama}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.jenis}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{item.guru}</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">{item.nilai}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <span
+                        className={`rounded-full px-3 py-1 font-medium ${
+                          grade === 'A'
+                            ? 'bg-green-100 text-green-700'
+                            : grade === 'B'
+                            ? 'bg-blue-100 text-blue-700'
+                            : grade === 'C'
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}
+                      >
+                        {grade}
+                      </span>
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </motion.div>
     </div>
   );

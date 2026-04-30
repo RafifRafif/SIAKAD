@@ -1,66 +1,48 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { BarChart3, ClipboardList, Users } from 'lucide-react';
-import { EmptyState } from '../../components/dashboard/EmptyState';
-import { formatTanggalIndonesia, getAttendanceRecords, getCurrentAuthProfile, type BackendAttendanceRecord } from '../../lib/guruData';
+
+const rekapAbsensi = [
+  {
+    id: 1,
+    tanggal: '20 April 2026',
+    kelas: 'X-A',
+    mapel: 'Matematika',
+    hadir: 31,
+    tidakHadir: 1,
+    keterangan: '1 siswa izin sakit',
+  },
+  {
+    id: 2,
+    tanggal: '20 April 2026',
+    kelas: 'XI-B',
+    mapel: 'Matematika',
+    hadir: 30,
+    tidakHadir: 2,
+    keterangan: '1 sakit, 1 keperluan keluarga',
+  },
+  {
+    id: 3,
+    tanggal: '21 April 2026',
+    kelas: 'X-A',
+    mapel: 'Matematika',
+    hadir: 32,
+    tidakHadir: 0,
+    keterangan: '-',
+  },
+  {
+    id: 4,
+    tanggal: '21 April 2026',
+    kelas: 'XI-B',
+    mapel: 'Matematika',
+    hadir: 31,
+    tidakHadir: 1,
+    keterangan: '1 izin lomba',
+  },
+];
 
 export default function RekapAbsensiGuruMapel() {
-  const [records, setRecords] = useState<BackendAttendanceRecord[]>([]);
-
-  useEffect(() => {
-    const loadData = async () => {
-      const profile = await getCurrentAuthProfile();
-      if (!profile?.teacher?.id) {
-        return;
-      }
-
-      const attendanceItems = await getAttendanceRecords({ teacherId: profile.teacher.id });
-      setRecords(attendanceItems);
-    };
-
-    void loadData();
-  }, []);
-
-  const rekapAbsensi = useMemo(
-    () =>
-      Object.values(
-        records.reduce<Record<string, {
-          id: string;
-          tanggal: string;
-          kelas: string;
-          mapel: string;
-          hadir: number;
-          tidakHadir: number;
-          keterangan: string;
-        }>>((accumulator, item) => {
-          const key = `${item.attendance_date.slice(0, 10)}-${item.class?.name ?? '-'}-${item.subject?.name ?? '-'}`;
-          if (!accumulator[key]) {
-            accumulator[key] = {
-              id: key,
-              tanggal: formatTanggalIndonesia(item.attendance_date),
-              kelas: item.class?.name ?? '-',
-              mapel: item.subject?.name ?? '-',
-              hadir: 0,
-              tidakHadir: 0,
-              keterangan: '-',
-            };
-          }
-
-          if (item.status === 'Hadir') {
-            accumulator[key].hadir += 1;
-          } else {
-            accumulator[key].tidakHadir += 1;
-            accumulator[key].keterangan = item.notes || item.status;
-          }
-
-          return accumulator;
-        }, {})
-      ),
-    [records]
-  );
-
   const totalPertemuan = rekapAbsensi.length;
   const totalTidakHadir = rekapAbsensi.reduce((sum, item) => sum + item.tidakHadir, 0);
 
@@ -117,47 +99,40 @@ export default function RekapAbsensiGuruMapel() {
           </p>
         </div>
 
-        {rekapAbsensi.length === 0 ? (
-          <EmptyState
-            message="Belum ada rekap absensi"
-            description="Presensi yang Anda input akan tampil di sini."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px]">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Tanggal</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelas</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Hadir</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Tidak Hadir</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Keterangan</th>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[860px]">
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Tanggal</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelas</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Hadir</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Tidak Hadir</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Keterangan</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {rekapAbsensi.map((item) => (
+                <tr key={item.id} className="transition-colors hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.tanggal}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.kelas}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className="rounded-full bg-green-100 px-3 py-1 font-medium text-green-700">
+                      {item.hadir} siswa
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm">
+                    <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-700">
+                      {item.tidakHadir} siswa
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.keterangan}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {rekapAbsensi.map((item) => (
-                  <tr key={item.id} className="transition-colors hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.tanggal}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.kelas}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className="rounded-full bg-green-100 px-3 py-1 font-medium text-green-700">
-                        {item.hadir} siswa
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-700">
-                        {item.tidakHadir} siswa
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.keterangan}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+              ))}
+            </tbody>
+          </table>
+        </div>
       </motion.div>
     </div>
   );

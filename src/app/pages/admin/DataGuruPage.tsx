@@ -5,113 +5,85 @@ import { Search, Plus, Edit, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
-import { apiRequest } from '../../lib/api';
-import { type GuruItem as Guru, type TahunAjaranItem } from '../../lib/masterDataTypes';
+import { defaultGuruData, GURU_STORAGE_KEY, type GuruItem as Guru } from '../../lib/guruStore';
+import {
+  defaultTahunAjaranData,
+  TAHUN_AJARAN_STORAGE_KEY,
+  type TahunAjaranItem,
+} from '../../lib/tahunAjaranStore';
 
 const roleOptions: Array<'Wali Kelas' | 'Guru Mapel'> = ['Wali Kelas', 'Guru Mapel'];
 
-interface BackendAcademicYear {
-  id: number;
-  name: string;
-  semester: 'Ganjil' | 'Genap';
-  is_active: boolean;
-}
-
-interface BackendTeacher {
-  id: number;
-  nip: string;
-  name: string;
-  roles: ('Wali Kelas' | 'Guru Mapel')[];
-  email: string | null;
-  phone: string | null;
-  status: 'Aktif' | 'Cuti';
-  academic_year?: BackendAcademicYear | null;
-}
-
-const defaultFormData = {
-  nip: '',
-  nama: '',
-  tahunAjaran: '',
-  role: ['Guru Mapel'] as ('Wali Kelas' | 'Guru Mapel')[],
-  email: '',
-  telepon: '',
-  status: 'Aktif' as 'Aktif' | 'Cuti',
-};
-
-const mapAcademicYearToOption = (item: BackendAcademicYear): TahunAjaranItem => ({
-  id: item.id,
-  nama: item.name,
-  semester: item.semester,
-  tanggalMulai: '',
-  tanggalSelesai: '',
-  status: item.is_active ? 'Aktif' : 'Draft',
-});
-
-const mapTeacherToViewModel = (teacher: BackendTeacher): Guru => ({
-  id: teacher.id,
-  nip: teacher.nip,
-  nama: teacher.name,
-  tahunAjaran: teacher.academic_year
-    ? `${teacher.academic_year.name} ${teacher.academic_year.semester}`
-    : '',
-  role: teacher.roles,
-  email: teacher.email ?? '',
-  telepon: teacher.phone ?? '',
-  status: teacher.status,
-});
-
 export default function DataGuruPage() {
-  const [guru, setGuru] = useState<Guru[]>([]);
+  const [guru, setGuru] = useState<Guru[]>(defaultGuruData);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTahunAjaran, setFilterTahunAjaran] = useState('all');
-  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>([]);
+  const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
+    defaultTahunAjaranData
+  );
   const [showModal, setShowModal] = useState(false);
   const [editingGuru, setEditingGuru] = useState<Guru | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const { toasts, showToast, removeToast } = useToast();
 
-  const [formData, setFormData] = useState(defaultFormData);
+  const [formData, setFormData] = useState({
+    nip: '',
+    nama: '',
+    tahunAjaran: '2025/2026 Genap',
+    role: ['Guru Mapel'] as ('Wali Kelas' | 'Guru Mapel')[],
+    email: '',
+    telepon: '',
+    status: 'Aktif' as 'Aktif' | 'Cuti',
+  });
+
+  useEffect(() => {
+    const storedData = window.localStorage.getItem(GURU_STORAGE_KEY);
+    if (!storedData) {
+      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
+      return;
+    }
+
+    try {
+      const parsedData = JSON.parse(storedData) as Guru[];
+      if (Array.isArray(parsedData) && parsedData.length > 0) {
+        setGuru(parsedData);
+      }
+    } catch {
+      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
+    }
+  }, []);
+
+  useEffect(() => {
+    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
+    if (!storedData) {
+      window.localStorage.setItem(
+        TAHUN_AJARAN_STORAGE_KEY,
+        JSON.stringify(defaultTahunAjaranData)
+      );
+      return;
+    }
+
+    try {
+      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
+      if (Array.isArray(parsedData) && parsedData.length > 0) {
+        setTahunAjaranOptions(parsedData);
+      }
+    } catch {
+      window.localStorage.setItem(
+        TAHUN_AJARAN_STORAGE_KEY,
+        JSON.stringify(defaultTahunAjaranData)
+      );
+    }
+  }, []);
 
   const tahunAjaranList = useMemo(
     () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
     [tahunAjaranOptions]
   );
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [teachersResponse, academicYearsResponse] = await Promise.all([
-          apiRequest<{ data: BackendTeacher[] }>('/teachers'),
-          apiRequest<{ data: BackendAcademicYear[] }>('/academic-years'),
-        ]);
-
-        setGuru(teachersResponse.data.map(mapTeacherToViewModel));
-        setTahunAjaranOptions(academicYearsResponse.data.map(mapAcademicYearToOption));
-      } catch (error) {
-        showToast(
-          error instanceof Error ? error.message : 'Gagal memuat data guru dari backend.',
-          'error'
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadData();
-  }, []);
-
-  useEffect(() => {
-    const nextAvailableYear = tahunAjaranList[1] ?? '';
-
-    setFormData((currentFormData) =>
-      currentFormData.tahunAjaran || !nextAvailableYear
-        ? currentFormData
-        : { ...currentFormData, tahunAjaran: nextAvailableYear }
-    );
-  }, [tahunAjaranList]);
-
-  const resolveAcademicYearId = (tahunAjaran: string) =>
-    tahunAjaranOptions.find((item) => `${item.nama} ${item.semester}` === tahunAjaran)?.id ?? null;
+  const syncGuru = (nextGuru: Guru[]) => {
+    setGuru(nextGuru);
+    window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(nextGuru));
+  };
 
   const filteredGuru = guru.filter((g) => {
     const matchesSearch =
@@ -126,8 +98,13 @@ export default function DataGuruPage() {
   const handleAdd = () => {
     setEditingGuru(null);
     setFormData({
-      ...defaultFormData,
+      nip: '',
+      nama: '',
       tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
+      role: ['Guru Mapel'],
+      email: '',
+      telepon: '',
+      status: 'Aktif',
     });
     setShowModal(true);
   };
@@ -139,24 +116,10 @@ export default function DataGuruPage() {
   };
 
   const handleDelete = (id: number) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus data guru ini?')) {
-      return;
+    if (confirm('Apakah Anda yakin ingin menghapus data guru ini?')) {
+      syncGuru(guru.filter((g) => g.id !== id));
+      showToast('Data guru berhasil dihapus!', 'success');
     }
-
-    void (async () => {
-      try {
-        const response = await apiRequest<{ message: string }>(`/teachers/${id}`, {
-          method: 'DELETE',
-        });
-        setGuru((currentGuru) => currentGuru.filter((item) => item.id !== id));
-        showToast(response.message, 'success');
-      } catch (error) {
-        showToast(
-          error instanceof Error ? error.message : 'Gagal menghapus data guru.',
-          'error'
-        );
-      }
-    })();
   };
 
   const handleRoleToggle = (selectedRole: 'Wali Kelas' | 'Guru Mapel') => {
@@ -180,52 +143,17 @@ export default function DataGuruPage() {
     });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const payload = {
-      nip: formData.nip,
-      name: formData.nama,
-      academic_year_id: resolveAcademicYearId(formData.tahunAjaran),
-      roles: formData.role,
-      email: formData.email || null,
-      phone: formData.telepon || null,
-      status: formData.status,
-    };
-
-    try {
-      if (editingGuru) {
-        const response = await apiRequest<{ message: string; data: BackendTeacher }>(
-          `/teachers/${editingGuru.id}`,
-          {
-            method: 'PUT',
-            body: payload,
-          }
-        );
-
-        setGuru((currentGuru) =>
-          currentGuru.map((item) =>
-            item.id === editingGuru.id ? mapTeacherToViewModel(response.data) : item
-          )
-        );
-        showToast(response.message, 'success');
-      } else {
-        const response = await apiRequest<{ message: string; data: BackendTeacher }>('/teachers', {
-          method: 'POST',
-          body: payload,
-        });
-
-        setGuru((currentGuru) => [...currentGuru, mapTeacherToViewModel(response.data)]);
-        showToast(response.message, 'success');
-      }
-
-      setShowModal(false);
-    } catch (error) {
-      showToast(
-        error instanceof Error ? error.message : 'Gagal menyimpan data guru.',
-        'error'
-      );
+    if (editingGuru) {
+      syncGuru(guru.map((g) => (g.id === editingGuru.id ? { ...formData, id: g.id } : g)));
+      showToast('Data guru berhasil diupdate!', 'success');
+    } else {
+      const newGuru = { ...formData, id: Date.now() };
+      syncGuru([...guru, newGuru]);
+      showToast('Guru baru berhasil ditambahkan!', 'success');
     }
+    setShowModal(false);
   };
 
   return (
@@ -283,11 +211,7 @@ export default function DataGuruPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        {isLoading ? (
-          <div className="px-6 py-10 text-center text-sm text-gray-500">
-            Memuat data guru dari backend...
-          </div>
-        ) : filteredGuru.length === 0 ? (
+        {filteredGuru.length === 0 ? (
           <EmptyState message="Tidak ada data guru" description="Silakan tambahkan guru baru" />
         ) : (
           <div className="overflow-x-auto">

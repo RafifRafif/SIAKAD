@@ -4,16 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
-import { setAuthState } from '../lib/auth';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:8000/api/v1';
-const roleLabels = {
-  admin: 'Admin',
-  'guru-kelas': 'Guru Kelas',
-  'guru-mapel': 'Guru Mapel',
-  siswa: 'Siswa',
-} as const;
-
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
@@ -37,58 +27,20 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    if (!formData.username || !formData.password) {
-      setError('Silakan isi semua field!');
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          password: formData.password,
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        message?: string;
-        data?: {
-          username: string;
-          role: 'admin' | 'guru-kelas' | 'guru-mapel' | 'siswa';
-        };
-        errors?: {
-          username?: string[];
-        };
-      };
-
-      if (!response.ok || !payload.data) {
-        setError(payload.errors?.username?.[0] ?? payload.message ?? 'Login gagal.');
-        setIsLoading(false);
-        return;
+    // Simulate API call
+    setTimeout(() => {
+      if (formData.username && formData.password) {
+        // Demo credentials - in real app, this would be API validation
+        if (formData.password === 'password') {
+          void router.push(`/${formData.role}`);
+        } else {
+          setError('Username atau password salah!');
+        }
+      } else {
+        setError('Silakan isi semua field!');
       }
-
-      setAuthState({
-        username: payload.data.username,
-        role: payload.data.role,
-      });
-
-      if (payload.data.role !== formData.role) {
-        setError(
-          `Akun ini terdaftar sebagai ${roleLabels[payload.data.role]}. Anda akan diarahkan ke halaman yang sesuai.`
-        );
-      }
-
-      void router.push(`/${payload.data.role}`);
-    } catch {
-      setError('Tidak dapat terhubung ke backend. Pastikan server backend aktif.');
-    } finally {
       setIsLoading(false);
-    }
+    }, 1000);
   };
 
   return (
@@ -228,16 +180,15 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Login Info */}
+              {/* Demo Info */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-xs text-blue-800 mb-2 font-medium">
-                  Informasi Login:
+                  Demo Credentials:
                 </p>
                 <p className="text-xs text-blue-700">
-                  Akun aktif saat ini:
-                  <span className="font-semibold"> admin, gkelas1, gmapel1, 2024001, 2024002</span>
+                  Username: <span className="font-semibold">any username</span>
                   <br />
-                  Password semuanya: <span className="font-semibold">password</span>
+                  Password: <span className="font-semibold">password</span>
                 </p>
               </div>
 
