@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, Percent, Save, Trophy } from 'lucide-react';
 import { Toast, useToast } from '../../components/dashboard/Toast';
+import { apiGet, apiPut } from '../../lib/apiClient';
 import {
-  BOBOT_PENILAIAN_STORAGE_KEY,
   defaultBobotPenilaianConfig,
+  type BobotPenilaianConfig,
   type BobotPenilaianItem,
   type GradeRangeItem,
 } from '../../lib/bobotPenilaianStore';
@@ -28,27 +29,12 @@ export default function BobotPenilaianPage() {
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
-    const storedConfig = window.localStorage.getItem(BOBOT_PENILAIAN_STORAGE_KEY);
-    if (!storedConfig) {
-      window.localStorage.setItem(
-        BOBOT_PENILAIAN_STORAGE_KEY,
-        JSON.stringify(defaultBobotPenilaianConfig)
-      );
-      return;
-    }
-
-    try {
-      const parsedConfig = JSON.parse(storedConfig) as typeof defaultBobotPenilaianConfig;
-      if (Array.isArray(parsedConfig.bobot) && Array.isArray(parsedConfig.gradeRanges)) {
-        setBobotPenilaian(parsedConfig.bobot);
-        setGradeRanges(parsedConfig.gradeRanges);
-      }
-    } catch {
-      window.localStorage.setItem(
-        BOBOT_PENILAIAN_STORAGE_KEY,
-        JSON.stringify(defaultBobotPenilaianConfig)
-      );
-    }
+    void apiGet<BobotPenilaianConfig>('/api/assessment-setting')
+      .then((config) => {
+        setBobotPenilaian(config.bobot);
+        setGradeRanges(config.gradeRanges);
+      })
+      .catch(() => showToast('Gagal memuat bobot penilaian dari backend.', 'error'));
   }, []);
 
   const totalBobot = useMemo(
@@ -87,7 +73,7 @@ export default function BobotPenilaianPage() {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (totalBobot !== 100) {
       showToast('Total bobot penilaian harus tepat 100%.', 'error');
       return;
@@ -106,11 +92,17 @@ export default function BobotPenilaianPage() {
       gradeRanges: [...gradeRanges].sort((a, b) => b.nilaiMinimum - a.nilaiMinimum),
     };
 
-    window.localStorage.setItem(
-      BOBOT_PENILAIAN_STORAGE_KEY,
-      JSON.stringify(normalizedConfig)
-    );
-    showToast('Bobot penilaian berhasil disimpan!', 'success');
+    try {
+      const savedConfig = await apiPut<BobotPenilaianConfig>(
+        '/api/assessment-setting',
+        normalizedConfig
+      );
+      setBobotPenilaian(savedConfig.bobot);
+      setGradeRanges(savedConfig.gradeRanges);
+      showToast('Bobot penilaian berhasil disimpan!', 'success');
+    } catch {
+      showToast('Gagal menyimpan bobot penilaian.', 'error');
+    }
   };
 
   return (

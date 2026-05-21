@@ -5,10 +5,11 @@ import { Search, Plus, Edit, Trash2, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
-import { defaultSiswaData, SISWA_STORAGE_KEY, type StudentItem as Student } from '../../lib/siswaStore';
+import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
+import { type KelasItem } from '../../lib/kelasStore';
+import { defaultSiswaData, type StudentItem as Student } from '../../lib/siswaStore';
 import {
   defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
@@ -20,73 +21,48 @@ export default function DataSiswaPage() {
   const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
     defaultTahunAjaranData
   );
+  const [kelasOptions, setKelasOptions] = useState<KelasItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const itemsPerPage = 5;
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
     nis: '',
     nama: '',
-    tahunAjaran: '2025/2026 Genap',
-    kelas: 'X-A',
+    tahunAjaran: '',
+    kelas: '',
     jenisKelamin: 'Laki-laki',
     email: '',
     telepon: '',
   });
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(SISWA_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(defaultSiswaData));
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as Student[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setStudents(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(defaultSiswaData));
-    }
+    void apiGet<Student[]>('/api/students')
+      .then(setStudents)
+      .catch(() => showToast('Gagal memuat data siswa dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
+    void apiGet<TahunAjaranItem[]>('/api/academic-years')
+      .then(setTahunAjaranOptions)
+      .catch(() => showToast('Gagal memuat tahun ajaran dari backend.', 'error'));
+  }, []);
 
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaranOptions(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
+  useEffect(() => {
+    void apiGet<KelasItem[]>('/api/school-classes')
+      .then(setKelasOptions)
+      .catch(() => showToast('Gagal memuat data kelas dari backend.', 'error'));
   }, []);
 
   const tahunAjaranList = useMemo(
     () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
     [tahunAjaranOptions]
   );
-
-  const syncStudents = (nextStudents: Student[]) => {
-    setStudents(nextStudents);
-    window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(nextStudents));
-  };
 
   // Filter students
   const filteredStudents = students.filter((student) => {
@@ -109,9 +85,9 @@ export default function DataSiswaPage() {
     setFormData({
       nis: '',
       nama: '',
-      tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
-      kelas: 'X-A',
-      jenisKelamin: 'Laki-laki',
+      tahunAjaran: '',
+      kelas: '',
+      jenisKelamin: '',
       email: '',
       telepon: '',
     });
@@ -123,14 +99,31 @@ export default function DataSiswaPage() {
     setShowImportModal(true);
   };
 
-  const handleImportSubmit = () => {
+  const handleImportSubmit = async () => {
     if (!importFile) {
       showToast('Silakan pilih file Excel terlebih dahulu!', 'error');
       return;
     }
 
-    showToast(`File ${importFile.name} siap diproses untuk import data siswa.`, 'success');
-    setShowImportModal(false);
+    try {
+      const body = new FormData();
+      body.append('file', importFile);
+
+      const response = await apiUpload<{
+        imported: number;
+        skipped: Array<{ row: number; message: string }>;
+        students: Student[];
+      }>('/api/students/import', body);
+
+      setStudents(response.students);
+      showToast(
+        `Import selesai: ${response.imported} siswa diproses, ${response.skipped.length} baris dilewati.`,
+        'success'
+      );
+      setShowImportModal(false);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal mengimport data siswa.'), 'error');
+    }
   };
 
   const handleEdit = (student: Student) => {
@@ -139,29 +132,75 @@ export default function DataSiswaPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Apakah Anda yakin ingin menghapus siswa ini?')) {
-      syncStudents(students.filter((s) => s.id !== id));
-      showToast('Siswa berhasil dihapus!', 'success');
+      try {
+        await apiDelete(`/api/students/${id}`);
+        setStudents((current) => current.filter((s) => s.id !== id));
+        showToast('Siswa berhasil dihapus!', 'success');
+      } catch {
+        showToast('Gagal menghapus data siswa.', 'error');
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingStudent) {
-      syncStudents(
-        students.map((s) => (s.id === editingStudent.id ? { ...formData, id: s.id } : s))
-      );
-      showToast('Data siswa berhasil diupdate!', 'success');
-    } else {
-      const newStudent = { ...formData, id: Date.now() };
-      syncStudents([...students, newStudent]);
-      showToast('Siswa baru berhasil ditambahkan!', 'success');
+
+    if (isSaving) {
+      return;
     }
-    setShowModal(false);
+
+    if (!formData.tahunAjaran || !formData.kelas || !formData.jenisKelamin) {
+      showToast('Tahun ajaran, kelas, dan jenis kelamin wajib dipilih sebelum menyimpan siswa.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const payload = {
+        ...formData,
+        nis: formData.nis.trim(),
+        nama: formData.nama.trim(),
+        tahunAjaran: formData.tahunAjaran.trim(),
+        kelas: formData.kelas.trim(),
+        email: formData.email.trim(),
+        telepon: formData.telepon.trim(),
+      };
+
+      if (editingStudent) {
+        const updatedStudent = await apiPut<Student>(
+          `/api/students/${editingStudent.id}`,
+          payload
+        );
+        setStudents((current) => upsertStudent(current, updatedStudent));
+        showToast('Data siswa berhasil diupdate!', 'success');
+      } else {
+        const newStudent = await apiPost<Student>('/api/students', payload);
+        setStudents((current) => upsertStudent(current, newStudent));
+        showToast('Siswa baru berhasil ditambahkan!', 'success');
+      }
+      setShowModal(false);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal menyimpan data siswa.'), 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const kelasList = ['all', 'X-A', 'X-B', 'XI-A', 'XI-B', 'XII-A', 'XII-B'];
+  const kelasList = useMemo(
+    () => [
+      'all',
+      ...Array.from(
+        new Set([
+          ...kelasOptions.map((item) => item.nama),
+          ...students.map((student) => student.kelas),
+        ].filter(Boolean))
+      ),
+    ],
+    [kelasOptions, students]
+  );
 
   return (
     <div className="space-y-6">
@@ -500,6 +539,9 @@ export default function DataSiswaPage() {
                         }
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
                       >
+                        <option value="" disabled>
+                          Pilih tahun ajaran
+                        </option>
                         {tahunAjaranList.filter((item) => item !== 'all').map((tahunAjaran) => (
                           <option key={tahunAjaran} value={tahunAjaran}>
                             {tahunAjaran}
@@ -517,6 +559,9 @@ export default function DataSiswaPage() {
                         onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
                       >
+                        <option value="" disabled>
+                          Pilih kelas
+                        </option>
                         {kelasList.filter((k) => k !== 'all').map((kelas) => (
                           <option key={kelas} value={kelas}>
                             {kelas}
@@ -536,6 +581,9 @@ export default function DataSiswaPage() {
                         }
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
                       >
+                        <option value="" disabled>
+                          Pilih jenis kelamin
+                        </option>
                         <option value="Laki-laki">Laki-laki</option>
                         <option value="Perempuan">Perempuan</option>
                       </select>
@@ -592,3 +640,32 @@ export default function DataSiswaPage() {
     </div>
   );
 }
+
+const upsertStudent = (items: Student[], nextItem: Student) => {
+  if (items.some((item) => item.id === nextItem.id)) {
+    return items.map((item) => (item.id === nextItem.id ? nextItem : item));
+  }
+
+  return [...items, nextItem];
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (! (error instanceof ApiError)) {
+    return fallback;
+  }
+
+  if (
+    typeof error.payload === 'object' &&
+    error.payload !== null &&
+    'errors' in error.payload
+  ) {
+    const errors = (error.payload as { errors?: Record<string, string[]> }).errors;
+    const firstError = errors ? Object.values(errors)[0]?.[0] : null;
+
+    if (firstError) {
+      return firstError;
+    }
+  }
+
+  return error.message || fallback;
+};

@@ -5,14 +5,13 @@ import { Search, Plus, Edit, Trash2, X, BookOpen } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
+import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
 import {
   defaultMasterPelajaran,
-  MASTER_PELAJARAN_STORAGE_KEY,
   type MasterPelajaran,
 } from '../../lib/pelajaranStore';
 import {
   defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
@@ -25,61 +24,23 @@ export default function MasterPelajaranPage() {
   );
   const [showModal, setShowModal] = useState(false);
   const [editingPelajaran, setEditingPelajaran] = useState<MasterPelajaran | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     nama: '',
-    tahunAjaran: '2025/2026 Genap',
+    tahunAjaran: '',
   });
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(MASTER_PELAJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        MASTER_PELAJARAN_STORAGE_KEY,
-        JSON.stringify(defaultMasterPelajaran)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as MasterPelajaran[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setPelajaran(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        MASTER_PELAJARAN_STORAGE_KEY,
-        JSON.stringify(defaultMasterPelajaran)
-      );
-    }
+    void apiGet<MasterPelajaran[]>('/api/subjects')
+      .then((items) => setPelajaran(dedupePelajaran(items)))
+      .catch(() => showToast('Gagal memuat data pelajaran dari backend.', 'error'));
   }, []);
 
-  const syncPelajaran = (nextPelajaran: MasterPelajaran[]) => {
-    setPelajaran(nextPelajaran);
-    window.localStorage.setItem(MASTER_PELAJARAN_STORAGE_KEY, JSON.stringify(nextPelajaran));
-  };
-
   useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaranOptions(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
+    void apiGet<TahunAjaranItem[]>('/api/academic-years')
+      .then(setTahunAjaranOptions)
+      .catch(() => showToast('Gagal memuat tahun ajaran dari backend.', 'error'));
   }, []);
 
   const tahunAjaranList = useMemo(
@@ -97,7 +58,7 @@ export default function MasterPelajaranPage() {
     setEditingPelajaran(null);
     setFormData({
       nama: '',
-      tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
+      tahunAjaran: '',
     });
     setShowModal(true);
   };
@@ -111,16 +72,24 @@ export default function MasterPelajaranPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Apakah Anda yakin ingin menghapus data pelajaran ini?')) {
-      const nextPelajaran = pelajaran.filter((item) => item.id !== id);
-      syncPelajaran(nextPelajaran);
-      showToast('Data pelajaran berhasil dihapus!', 'success');
+      try {
+        await apiDelete(`/api/subjects/${id}`);
+        setPelajaran((current) => current.filter((item) => item.id !== id));
+        showToast('Data pelajaran berhasil dihapus!', 'success');
+      } catch {
+        showToast('Gagal menghapus data pelajaran.', 'error');
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isSaving) {
+      return;
+    }
 
     const trimmedNama = formData.nama.trim();
     if (!trimmedNama) {
@@ -128,9 +97,15 @@ export default function MasterPelajaranPage() {
       return;
     }
 
+    if (!formData.tahunAjaran) {
+      showToast('Tahun ajaran wajib dipilih!', 'error');
+      return;
+    }
+
     const duplicatePelajaran = pelajaran.some(
       (item) =>
         item.nama.toLowerCase() === trimmedNama.toLowerCase() &&
+        item.tahunAjaran === formData.tahunAjaran &&
         item.id !== editingPelajaran?.id
     );
     if (duplicatePelajaran) {
@@ -138,24 +113,30 @@ export default function MasterPelajaranPage() {
       return;
     }
 
-    if (editingPelajaran) {
-      const nextPelajaran = pelajaran.map((item) =>
-        item.id === editingPelajaran.id
-          ? { ...item, nama: trimmedNama, tahunAjaran: formData.tahunAjaran }
-          : item
-      );
-      syncPelajaran(nextPelajaran);
-      showToast('Data pelajaran berhasil diperbarui!', 'success');
-    } else {
-      const nextPelajaran = [
-        ...pelajaran,
-        { id: Date.now(), nama: trimmedNama, tahunAjaran: formData.tahunAjaran },
-      ];
-      syncPelajaran(nextPelajaran);
-      showToast('Data pelajaran berhasil ditambahkan!', 'success');
-    }
+    setIsSaving(true);
 
-    setShowModal(false);
+    try {
+      const payload = { nama: trimmedNama, tahunAjaran: formData.tahunAjaran };
+
+      if (editingPelajaran) {
+        const updatedPelajaran = await apiPut<MasterPelajaran>(
+          `/api/subjects/${editingPelajaran.id}`,
+          payload
+        );
+        setPelajaran((current) => upsertPelajaran(current, updatedPelajaran));
+        showToast('Data pelajaran berhasil diperbarui!', 'success');
+      } else {
+        const newPelajaran = await apiPost<MasterPelajaran>('/api/subjects', payload);
+        setPelajaran((current) => upsertPelajaran(current, newPelajaran));
+        showToast('Data pelajaran berhasil ditambahkan!', 'success');
+      }
+
+      setShowModal(false);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal menyimpan data pelajaran.'), 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -317,6 +298,9 @@ export default function MasterPelajaranPage() {
                     onChange={(e) => setFormData({ ...formData, tahunAjaran: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                   >
+                    <option value="" disabled>
+                      Pilih tahun ajaran
+                    </option>
                     {tahunAjaranList.filter((item) => item !== 'all').map((tahunAjaran) => (
                       <option key={tahunAjaran} value={tahunAjaran}>
                         {tahunAjaran}
@@ -348,3 +332,42 @@ export default function MasterPelajaranPage() {
     </div>
   );
 }
+
+const pelajaranKey = (item: Pick<MasterPelajaran, 'nama' | 'tahunAjaran'>) =>
+  `${item.nama.trim().toLowerCase()}|${item.tahunAjaran}`;
+
+const dedupePelajaran = (items: MasterPelajaran[]) =>
+  Array.from(new Map(items.map((item) => [pelajaranKey(item), item])).values());
+
+const upsertPelajaran = (items: MasterPelajaran[], nextItem: MasterPelajaran) => {
+  const key = pelajaranKey(nextItem);
+
+  if (items.some((item) => item.id === nextItem.id || pelajaranKey(item) === key)) {
+    return items.map((item) =>
+      item.id === nextItem.id || pelajaranKey(item) === key ? nextItem : item
+    );
+  }
+
+  return [...items, nextItem];
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (! (error instanceof ApiError)) {
+    return fallback;
+  }
+
+  if (
+    typeof error.payload === 'object' &&
+    error.payload !== null &&
+    'errors' in error.payload
+  ) {
+    const errors = (error.payload as { errors?: Record<string, string[]> }).errors;
+    const firstError = errors ? Object.values(errors)[0]?.[0] : null;
+
+    if (firstError) {
+      return firstError;
+    }
+  }
+
+  return error.message || fallback;
+};

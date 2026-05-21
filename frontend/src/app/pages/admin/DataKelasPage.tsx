@@ -5,12 +5,12 @@ import { Search, Plus, Edit, Trash2, X, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
-import { defaultKelasData, KELAS_STORAGE_KEY, type KelasItem as Kelas } from '../../lib/kelasStore';
-import { defaultGuruData, GURU_STORAGE_KEY, type GuruItem } from '../../lib/guruStore';
-import { defaultSiswaData, SISWA_STORAGE_KEY, type StudentItem } from '../../lib/siswaStore';
+import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
+import { defaultKelasData, type KelasItem as Kelas } from '../../lib/kelasStore';
+import { defaultGuruData, type GuruItem } from '../../lib/guruStore';
+import { defaultSiswaData, type StudentItem } from '../../lib/siswaStore';
 import {
   defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
@@ -27,97 +27,40 @@ export default function DataKelasPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
     nama: '',
-    tahunAjaran: '2025/2026 Genap',
+    tahunAjaran: '',
     kelompok: 'Ikhwan' as 'Ikhwan' | 'Akhwat',
-    waliKelas:
-      defaultGuruData.find((item) => item.role.includes('Wali Kelas'))?.nama ?? '',
+    waliKelas: '',
     jumlahSiswa: 0,
   });
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(KELAS_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(KELAS_STORAGE_KEY, JSON.stringify(defaultKelasData));
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as Kelas[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setKelas(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(KELAS_STORAGE_KEY, JSON.stringify(defaultKelasData));
-    }
+    void apiGet<Kelas[]>('/api/school-classes')
+      .then(setKelas)
+      .catch(() => showToast('Gagal memuat data kelas dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaranOptions(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
+    void apiGet<TahunAjaranItem[]>('/api/academic-years')
+      .then(setTahunAjaranOptions)
+      .catch(() => showToast('Gagal memuat tahun ajaran dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
-    const storedGuru = window.localStorage.getItem(GURU_STORAGE_KEY);
-    if (!storedGuru) {
-      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
-      setWaliKelasOptions(defaultGuruData.filter((item) => item.role.includes('Wali Kelas')));
-      return;
-    }
-
-    try {
-      const parsedGuru = JSON.parse(storedGuru) as GuruItem[];
-      if (Array.isArray(parsedGuru)) {
-        setWaliKelasOptions(parsedGuru.filter((item) => item.role.includes('Wali Kelas')));
-      }
-    } catch {
-      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
-      setWaliKelasOptions(defaultGuruData.filter((item) => item.role.includes('Wali Kelas')));
-    }
+    void apiGet<GuruItem[]>('/api/teachers')
+      .then((items) => setWaliKelasOptions(items.filter((item) => item.role.includes('Wali Kelas'))))
+      .catch(() => showToast('Gagal memuat data wali kelas dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
-    const storedSiswa = window.localStorage.getItem(SISWA_STORAGE_KEY);
-    if (!storedSiswa) {
-      window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(defaultSiswaData));
-      return;
-    }
-
-    try {
-      const parsedSiswa = JSON.parse(storedSiswa) as StudentItem[];
-      if (Array.isArray(parsedSiswa)) {
-        setStudents(parsedSiswa);
-      }
-    } catch {
-      window.localStorage.setItem(SISWA_STORAGE_KEY, JSON.stringify(defaultSiswaData));
-    }
+    void apiGet<StudentItem[]>('/api/students')
+      .then(setStudents)
+      .catch(() => showToast('Gagal memuat data siswa dari backend.', 'error'));
   }, []);
-
-  const syncKelas = (nextKelas: Kelas[]) => {
-    setKelas(nextKelas);
-    window.localStorage.setItem(KELAS_STORAGE_KEY, JSON.stringify(nextKelas));
-  };
 
   const jumlahSiswaByKelas = useMemo(
     () =>
@@ -136,22 +79,24 @@ export default function DataKelasPage() {
     const matchesSearch =
       item.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.kelompok.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.waliKelas.toLowerCase().includes(searchQuery.toLowerCase());
+      (item.waliKelas ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTahunAjaran =
       filterTahunAjaran === 'all' || item.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesTahunAjaran;
   });
 
   const handleAdd = () => {
+    if (tahunAjaranList.length <= 1) {
+      showToast('Tambahkan tahun ajaran terlebih dahulu sebelum membuat kelas.', 'error');
+      return;
+    }
+
     setEditingKelas(null);
     setFormData({
       nama: '',
-      tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
+      tahunAjaran: '',
       kelompok: 'Ikhwan',
-      waliKelas:
-        waliKelasOptions[0]?.nama ??
-        defaultGuruData.find((item) => item.role.includes('Wali Kelas'))?.nama ??
-        '',
+      waliKelas: '',
       jumlahSiswa: 0,
     });
     setShowModal(true);
@@ -169,27 +114,58 @@ export default function DataKelasPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Apakah Anda yakin ingin menghapus data kelas ini?')) {
-      syncKelas(kelas.filter((item) => item.id !== id));
-      showToast('Data kelas berhasil dihapus!', 'success');
+      try {
+        await apiDelete(`/api/school-classes/${id}`);
+        setKelas((current) => current.filter((item) => item.id !== id));
+        showToast('Data kelas berhasil dihapus!', 'success');
+      } catch {
+        showToast('Gagal menghapus data kelas.', 'error');
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingKelas) {
-      syncKelas(
-        kelas.map((item) =>
-          item.id === editingKelas.id ? { ...formData, id: item.id } : item
-        )
-      );
-      showToast('Data kelas berhasil diperbarui!', 'success');
-    } else {
-      syncKelas([...kelas, { ...formData, id: Date.now() }]);
-      showToast('Data kelas berhasil ditambahkan!', 'success');
+
+    if (isSaving) {
+      return;
     }
-    setShowModal(false);
+
+    if (!formData.tahunAjaran) {
+      showToast('Tahun ajaran wajib dipilih sebelum menyimpan kelas.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const payload = {
+        ...formData,
+        nama: formData.nama.trim(),
+        tahunAjaran: formData.tahunAjaran.trim(),
+        waliKelas: formData.waliKelas.trim(),
+      };
+
+      if (editingKelas) {
+        const updatedKelas = await apiPut<Kelas>(
+          `/api/school-classes/${editingKelas.id}`,
+          payload
+        );
+        setKelas((current) => upsertKelas(current, updatedKelas));
+        showToast('Data kelas berhasil diperbarui!', 'success');
+      } else {
+        const newKelas = await apiPost<Kelas>('/api/school-classes', payload);
+        setKelas((current) => upsertKelas(current, newKelas));
+        showToast('Data kelas berhasil ditambahkan!', 'success');
+      }
+      setShowModal(false);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal menyimpan data kelas.'), 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -350,6 +326,9 @@ export default function DataKelasPage() {
                       onChange={(e) => setFormData({ ...formData, tahunAjaran: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     >
+                      <option value="" disabled>
+                        Pilih tahun ajaran
+                      </option>
                       {tahunAjaranList.filter((item) => item !== 'all').map((tahunAjaran) => (
                         <option key={tahunAjaran} value={tahunAjaran}>
                           {tahunAjaran}
@@ -377,6 +356,9 @@ export default function DataKelasPage() {
                       onChange={(e) => setFormData({ ...formData, waliKelas: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     >
+                      <option value="">
+                        Pilih wali kelas
+                      </option>
                       {waliKelasOptions.map((item) => (
                         <option key={item.id} value={item.nama}>
                           {item.nama}
@@ -414,3 +396,32 @@ export default function DataKelasPage() {
     </div>
   );
 }
+
+const upsertKelas = (items: Kelas[], nextItem: Kelas) => {
+  if (items.some((item) => item.id === nextItem.id)) {
+    return items.map((item) => (item.id === nextItem.id ? nextItem : item));
+  }
+
+  return [...items, nextItem];
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (! (error instanceof ApiError)) {
+    return fallback;
+  }
+
+  if (
+    typeof error.payload === 'object' &&
+    error.payload !== null &&
+    'errors' in error.payload
+  ) {
+    const errors = (error.payload as { errors?: Record<string, string[]> }).errors;
+    const firstError = errors ? Object.values(errors)[0]?.[0] : null;
+
+    if (firstError) {
+      return firstError;
+    }
+  }
+
+  return error.message || fallback;
+};

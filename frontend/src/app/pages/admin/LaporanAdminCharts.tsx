@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   BarChart,
@@ -13,26 +14,76 @@ import {
   LineChart,
   Line,
 } from 'recharts';
+import {
+  getAttendanceRecords,
+  getGrades,
+  monthLabelFromDate,
+  type AttendanceRecordItem,
+  type StudentGradeItem,
+} from '../../lib/academicActivityStore';
 
-const monthlyData = [
-  { bulan: 'Jan', hadir: 95, tidak: 5 },
-  { bulan: 'Feb', hadir: 93, tidak: 7 },
-  { bulan: 'Mar', hadir: 96, tidak: 4 },
-  { bulan: 'Apr', hadir: 94, tidak: 6 },
-  { bulan: 'Mei', hadir: 97, tidak: 3 },
-  { bulan: 'Jun', hadir: 98, tidak: 2 },
-];
+interface LaporanAdminChartsProps {
+  bulan?: string;
+  kelas?: string;
+}
 
-const gradeData = [
-  { kelas: 'X-A', rata: 85 },
-  { kelas: 'X-B', rata: 83 },
-  { kelas: 'XI-A', rata: 87 },
-  { kelas: 'XI-B', rata: 86 },
-  { kelas: 'XII-A', rata: 90 },
-  { kelas: 'XII-B', rata: 88 },
-];
+export default function LaporanAdminCharts({ bulan, kelas }: LaporanAdminChartsProps) {
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordItem[]>([]);
+  const [grades, setGrades] = useState<StudentGradeItem[]>([]);
 
-export default function LaporanAdminCharts() {
+  useEffect(() => {
+    const params = {
+      bulan: bulan === 'Data dari backend' ? undefined : bulan,
+      kelas: kelas === 'all' ? undefined : kelas,
+    };
+
+    void getAttendanceRecords(params).then(setAttendanceRecords).catch(() => setAttendanceRecords([]));
+    void getGrades(params).then(setGrades).catch(() => setGrades([]));
+  }, [bulan, kelas]);
+
+  const monthlyData = useMemo(() => {
+    const grouped = new Map<string, { bulan: string; hadir: number; tidak: number }>();
+
+    attendanceRecords.forEach((record) => {
+      const bulan = monthLabelFromDate(record.tanggal) || '-';
+      const existing = grouped.get(bulan) ?? { bulan, hadir: 0, tidak: 0 };
+
+      if (record.statusCode === 'H') {
+        existing.hadir += 1;
+      } else {
+        existing.tidak += 1;
+      }
+
+      grouped.set(bulan, existing);
+    });
+
+    return Array.from(grouped.values()).map((item) => {
+      const total = item.hadir + item.tidak;
+      return {
+        bulan: item.bulan,
+        hadir: total > 0 ? Number(((item.hadir / total) * 100).toFixed(1)) : 0,
+        tidak: total > 0 ? Number(((item.tidak / total) * 100).toFixed(1)) : 0,
+      };
+    });
+  }, [attendanceRecords]);
+
+  const gradeData = useMemo(() => {
+    const grouped = new Map<string, { kelas: string; total: number; count: number }>();
+
+    grades.forEach((grade) => {
+      const kelas = grade.kelas || '-';
+      const existing = grouped.get(kelas) ?? { kelas, total: 0, count: 0 };
+      existing.total += Number(grade.nilai);
+      existing.count += 1;
+      grouped.set(kelas, existing);
+    });
+
+    return Array.from(grouped.values()).map((item) => ({
+      kelas: item.kelas,
+      rata: item.count > 0 ? Number((item.total / item.count).toFixed(2)) : 0,
+    }));
+  }, [grades]);
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <motion.div

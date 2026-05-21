@@ -15,8 +15,9 @@ export default function GuruAccessGate({ requiredAccess, children }: GuruAccessG
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    setAccess(getCurrentGuruAccess());
-    setIsReady(true);
+    void getCurrentGuruAccess()
+      .then(setAccess)
+      .finally(() => setIsReady(true));
   }, []);
 
   if (!isReady) {

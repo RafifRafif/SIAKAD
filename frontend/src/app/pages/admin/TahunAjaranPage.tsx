@@ -5,9 +5,9 @@ import { Search, Plus, Edit, Trash2, X, CalendarRange, CheckCircle2 } from 'luci
 import { AnimatePresence, motion } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../../lib/apiClient';
 import {
   defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
   type TahunAjaranItem as TahunAjaran,
 } from '../../lib/tahunAjaranStore';
 
@@ -16,6 +16,7 @@ export default function TahunAjaranPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<TahunAjaran | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -27,32 +28,10 @@ export default function TahunAjaranPage() {
   });
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaran[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaran(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
+    void apiGet<TahunAjaran[]>('/api/academic-years')
+      .then(setTahunAjaran)
+      .catch(() => showToast('Gagal memuat data tahun ajaran dari backend.', 'error'));
   }, []);
-
-  const syncTahunAjaran = (nextTahunAjaran: TahunAjaran[]) => {
-    setTahunAjaran(nextTahunAjaran);
-    window.localStorage.setItem(TAHUN_AJARAN_STORAGE_KEY, JSON.stringify(nextTahunAjaran));
-  };
 
   const filteredData = tahunAjaran.filter(
     (item) =>
@@ -89,39 +68,72 @@ export default function TahunAjaranPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Apakah Anda yakin ingin menghapus tahun ajaran ini?')) {
-      syncTahunAjaran(tahunAjaran.filter((item) => item.id !== id));
-      showToast('Tahun ajaran berhasil dihapus!', 'success');
+      try {
+        await apiDelete(`/api/academic-years/${id}`);
+        setTahunAjaran((current) => current.filter((item) => item.id !== id));
+        showToast('Tahun ajaran berhasil dihapus!', 'success');
+      } catch {
+        showToast('Gagal menghapus tahun ajaran.', 'error');
+      }
     }
   };
 
-  const handleSetActive = (id: number) => {
-    syncTahunAjaran(
-      tahunAjaran.map((item) => ({
-        ...item,
-        status: item.id === id ? 'Aktif' : item.status === 'Aktif' ? 'Arsip' : item.status,
-      }))
-    );
-    showToast('Tahun ajaran aktif berhasil diperbarui!', 'success');
+  const handleSetActive = async (id: number) => {
+    try {
+      const activeYear = await apiPatch<TahunAjaran>(`/api/academic-years/${id}/active`);
+      setTahunAjaran((current) =>
+        current.map((item) => ({
+          ...item,
+          status:
+            item.id === activeYear.id
+              ? activeYear.status
+              : item.status === 'Aktif'
+              ? 'Arsip'
+              : item.status,
+        }))
+      );
+      showToast('Tahun ajaran aktif berhasil diperbarui!', 'success');
+    } catch {
+      showToast('Gagal memperbarui tahun ajaran aktif.', 'error');
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (editingItem) {
-      syncTahunAjaran(
-        tahunAjaran.map((item) =>
-          item.id === editingItem.id ? { ...formData, id: item.id } : item
-        )
-      );
-      showToast('Tahun ajaran berhasil diperbarui!', 'success');
-    } else {
-      syncTahunAjaran([...tahunAjaran, { ...formData, id: Date.now() }]);
-      showToast('Tahun ajaran berhasil ditambahkan!', 'success');
+    if (isSaving) {
+      return;
     }
 
-    setShowModal(false);
+    setIsSaving(true);
+
+    try {
+      const payload = {
+        ...formData,
+        nama: formData.nama.trim(),
+      };
+
+      if (editingItem) {
+        const updatedItem = await apiPut<TahunAjaran>(
+          `/api/academic-years/${editingItem.id}`,
+          payload
+        );
+        setTahunAjaran((current) => upsertTahunAjaran(current, updatedItem));
+        showToast('Tahun ajaran berhasil diperbarui!', 'success');
+      } else {
+        const newItem = await apiPost<TahunAjaran>('/api/academic-years', payload);
+        setTahunAjaran((current) => upsertTahunAjaran(current, newItem));
+        showToast('Tahun ajaran berhasil ditambahkan!', 'success');
+      }
+
+      setShowModal(false);
+    } catch {
+      showToast('Gagal menyimpan tahun ajaran.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -194,7 +206,7 @@ export default function TahunAjaranPage() {
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span
-                        className={`rounded-full px-3 py-1 font-medium ${
+                        className={`inline-flex items-center rounded-full px-3 py-1 font-medium ${
                           item.status === 'Aktif'
                             ? 'bg-green-100 text-green-700'
                             : item.status === 'Draft'
@@ -202,6 +214,7 @@ export default function TahunAjaranPage() {
                             : 'bg-gray-100 text-gray-700'
                         }`}
                       >
+                        <span className={`mr-2 inline-block h-2 w-2 rounded-full ${statusDotClass(item.status)}`} />
                         {item.status}
                       </span>
                     </td>
@@ -354,3 +367,20 @@ export default function TahunAjaranPage() {
     </div>
   );
 }
+
+const upsertTahunAjaran = (items: TahunAjaran[], nextItem: TahunAjaran) =>
+  items.some((item) => item.id === nextItem.id)
+    ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
+    : [...items, nextItem];
+
+const statusDotClass = (status: TahunAjaran['status']) => {
+  if (status === 'Aktif') {
+    return 'bg-green-500';
+  }
+
+  if (status === 'Draft') {
+    return 'bg-gray-400';
+  }
+
+  return 'bg-black';
+};

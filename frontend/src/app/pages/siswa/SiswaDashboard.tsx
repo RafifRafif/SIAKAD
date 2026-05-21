@@ -1,9 +1,23 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Award, TrendingUp, Calendar } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { motion } from 'motion/react';
+import { getAuthSession } from '../../lib/authStore';
+import {
+  getAttendanceRecords,
+  getGrades,
+  getQuranSubmissions,
+  getStudentInsights,
+  getTodaySchedule,
+  type AttendanceRecordItem,
+  type LearningAssignmentItem,
+  type QuranSubmissionItem,
+  type StudentInsights,
+  type StudentGradeItem,
+} from '../../lib/academicActivityStore';
 
 const SiswaGradeChart = dynamic(() => import('./SiswaGradeChart'), {
   ssr: false,
@@ -16,11 +30,72 @@ const SiswaGradeChart = dynamic(() => import('./SiswaGradeChart'), {
 });
 
 export default function SiswaDashboard() {
+  const [grades, setGrades] = useState<StudentGradeItem[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordItem[]>([]);
+  const [quranSubmissions, setQuranSubmissions] = useState<QuranSubmissionItem[]>([]);
+  const [assignments, setAssignments] = useState<LearningAssignmentItem[]>([]);
+  const [insights, setInsights] = useState<StudentInsights>({
+    rank: null,
+    classSize: 0,
+    notes: [],
+    achievements: [],
+  });
+
+  useEffect(() => {
+    const loadData = async () => {
+      const session = await getAuthSession();
+      const nis = session?.username;
+      const params = nis ? { nis } : {};
+
+      const [gradeItems, attendanceItems, quranItems, assignmentItems, insightItems] = await Promise.all([
+        getGrades(params),
+        getAttendanceRecords(params),
+        getQuranSubmissions(params),
+        getTodaySchedule(),
+        getStudentInsights(params),
+      ]);
+
+      setGrades(gradeItems);
+      setAttendanceRecords(attendanceItems);
+      setQuranSubmissions(quranItems);
+      setAssignments(assignmentItems);
+      setInsights(insightItems);
+    };
+
+    void loadData().catch(() => {
+      setGrades([]);
+      setAttendanceRecords([]);
+      setQuranSubmissions([]);
+      setAssignments([]);
+      setInsights({ rank: null, classSize: 0, notes: [], achievements: [] });
+    });
+  }, []);
+
+  const averageGrade = useMemo(() => {
+    if (grades.length === 0) {
+      return 0;
+    }
+
+    return grades.reduce((total, item) => total + Number(item.nilai), 0) / grades.length;
+  }, [grades]);
+  const attendancePercent = useMemo(() => {
+    if (attendanceRecords.length === 0) {
+      return 0;
+    }
+
+    const presentCount = attendanceRecords.filter((item) => item.statusCode === 'H').length;
+    return (presentCount / attendanceRecords.length) * 100;
+  }, [attendanceRecords]);
+  const latestQuran = quranSubmissions[0];
+  const quranProgress = Math.max(...quranSubmissions.map((item) => item.progress), 0);
+  const quranProgressPercent = (quranProgress / 30) * 100;
+  const rankLabel = insights.rank ? `${insights.rank}/${insights.classSize}` : '-';
+
   return (
     <div className="space-y-8">
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Selamat Datang! 👋
+          Selamat Datang!
         </h2>
         <p className="text-gray-600">Pantau perkembangan akademikmu di sini</p>
       </div>
@@ -29,30 +104,30 @@ export default function SiswaDashboard() {
         <StatCard
           icon={Award}
           label="Rata-rata Nilai"
-          value="88.5"
-          trend="2.5 poin naik"
+          value={averageGrade ? averageGrade.toFixed(2) : '0'}
+          trend=""
           trendUp={true}
           color="bg-blue-100 text-blue-600"
         />
         <StatCard
           icon={Calendar}
           label="Presensi Bulan Ini"
-          value="98%"
-          trend="Sangat Baik"
+          value={`${attendancePercent.toFixed(1)}%`}
+          trend=""
           trendUp={true}
           color="bg-green-100 text-green-600"
         />
         <StatCard
           icon={BookOpen}
           label="Progress Hafalan"
-          value="7 Juz"
+          value={`${quranProgress} Juz`}
           color="bg-purple-100 text-purple-600"
         />
         <StatCard
           icon={TrendingUp}
           label="Peringkat Kelas"
-          value="5"
-          trend="Dari 30 siswa"
+          value={rankLabel}
+          trend=""
           trendUp={true}
           color="bg-orange-100 text-orange-600"
         />
@@ -69,22 +144,18 @@ export default function SiswaDashboard() {
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Jadwal Hari Ini</h3>
           <div className="space-y-4">
-            {[
-              { jam: '07:30', mapel: 'Matematika', guru: 'Ustadz Ahmad' },
-              { jam: '09:15', mapel: 'Bahasa Inggris', guru: 'Ustadzah Siti' },
-              { jam: '11:00', mapel: 'Fisika', guru: 'Ustadz Rizki' },
-            ].map((jadwal, index) => (
+            {assignments.slice(0, 3).map((jadwal) => (
               <div
-                key={index}
+                key={jadwal.id}
                 className="p-3 border border-gray-200 rounded-lg hover:border-[#2563EB] transition-colors"
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-semibold text-gray-900 text-sm">
-                    {jadwal.mapel}
+                    {jadwal.nama}
                   </span>
-                  <span className="text-xs text-gray-500">{jadwal.jam}</span>
+                  <span className="text-xs text-gray-500">{jadwal.kelas}</span>
                 </div>
-                <p className="text-xs text-gray-600">{jadwal.guru}</p>
+                <p className="text-xs text-gray-600">{jadwal.guruPengampu}</p>
               </div>
             ))}
           </div>
@@ -102,14 +173,9 @@ export default function SiswaDashboard() {
             Nilai Terbaru
           </h3>
           <div className="space-y-3">
-            {[
-              { mapel: 'Matematika', nilai: 92, jenis: 'UTS' },
-              { mapel: 'Bahasa Inggris', nilai: 88, jenis: 'Quiz' },
-              { mapel: 'Fisika', nilai: 85, jenis: 'Tugas' },
-              { mapel: 'Kimia', nilai: 90, jenis: 'UTS' },
-            ].map((item, index) => (
+            {grades.slice(0, 4).map((item) => (
               <div
-                key={index}
+                key={item.id}
                 className="flex items-center justify-between p-3 border border-gray-200 rounded-lg"
               >
                 <div>
@@ -142,29 +208,31 @@ export default function SiswaDashboard() {
           <div className="mb-6">
             <div className="flex justify-between mb-2">
               <span>Progress Hafalan</span>
-              <span className="font-bold">7 / 30 Juz</span>
+              <span className="font-bold">{quranProgress} / 30 Juz</span>
             </div>
             <div className="w-full bg-white/30 rounded-full h-3">
               <div
                 className="bg-white h-3 rounded-full transition-all"
-                style={{ width: '23.3%' }}
+                style={{ width: `${quranProgressPercent}%` }}
               />
             </div>
-            <p className="text-xs text-blue-100 mt-2">23.3% selesai</p>
+            <p className="text-xs text-blue-100 mt-2">{quranProgressPercent.toFixed(1)}% selesai</p>
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span>Surah Terakhir:</span>
-              <span className="font-medium">Al-Baqarah</span>
+              <span className="font-medium">{latestQuran?.surah ?? '-'}</span>
             </div>
             <div className="flex justify-between">
               <span>Ayat Terakhir:</span>
-              <span className="font-medium">Ayat 150</span>
+              <span className="font-medium">
+                {latestQuran ? `Ayat ${latestQuran.ayatSelesai}` : '-'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span>Penilaian:</span>
               <span className="px-2 py-1 bg-white/20 rounded-full font-medium text-xs">
-                Lancar
+                {latestQuran?.penilaian ?? '-'}
               </span>
             </div>
           </div>

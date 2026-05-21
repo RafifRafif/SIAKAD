@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 import { motion } from 'motion/react';
-import { resolveLoginSession, saveAuthSession } from '../lib/authStore';
+import { resolveLoginSession } from '../lib/authStore';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,19 +21,21 @@ export default function LoginPage() {
     setError('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const session = resolveLoginSession(formData.username, formData.password);
+    try {
+      const loginResult = await resolveLoginSession(formData.username, formData.password);
 
-      if (!session) {
+      if (!loginResult) {
         setError('Akun tidak ditemukan atau password salah.');
         setIsLoading(false);
         return;
       }
 
-      saveAuthSession(session);
-      void router.push(`/${session.role}`);
+      void router.push(loginResult.redirectTo);
+    } catch {
+      setError('Tidak bisa terhubung ke server backend.');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -148,21 +150,6 @@ export default function LoginPage() {
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
-              </div>
-
-              {/* Demo Info */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-xs text-blue-800 mb-2 font-medium">
-                  Demo Credentials:
-                </p>
-                <p className="text-xs text-blue-700">
-                  Password: <span className="font-semibold">password</span>
-                  <br />
-                  Admin: <span className="font-semibold">admin</span>, Guru:{' '}
-                  <span className="font-semibold">NIP001</span> /{' '}
-                  <span className="font-semibold">NIP002</span>, Siswa:{' '}
-                  <span className="font-semibold">siswa</span>
-                </p>
               </div>
 
               {/* Submit Button */}

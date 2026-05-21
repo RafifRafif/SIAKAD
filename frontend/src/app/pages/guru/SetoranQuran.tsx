@@ -1,22 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Save, Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
-
-const siswaData = [
-  { id: 1, nis: '2024001', nama: 'Ahmad Fauzi', progress: 5 },
-  { id: 2, nis: '2024002', nama: 'Siti Nurhaliza', progress: 3 },
-  { id: 3, nis: '2024003', nama: 'Muhammad Rizki', progress: 7 },
-  { id: 4, nis: '2024003', nama: 'Muhammad Rizki', progress: 7 },
-  { id: 5, nis: '2024003', nama: 'Muhammad Rizki', progress: 7 },
-];
+import { apiGet, apiPost } from '../../lib/apiClient';
+import type { QuranSubmissionItem } from '../../lib/academicActivityStore';
+import type { StudentItem } from '../../lib/siswaStore';
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
 
 export default function SetoranQuran() {
-  const [selectedSiswa, setSelectedSiswa] = useState(siswaData[0].id);
+  const [students, setStudents] = useState<StudentItem[]>([]);
+  const [submissions, setSubmissions] = useState<QuranSubmissionItem[]>([]);
+  const [selectedSiswa, setSelectedSiswa] = useState<number | null>(null);
   const tanggal = getCurrentDate();
   const [surah, setSurah] = useState('');
   const [ayatMulai, setAyatMulai] = useState('');
@@ -24,15 +21,87 @@ export default function SetoranQuran() {
   const [keterangan, setKeterangan] = useState('');
   const [nilai, setNilai] = useState('Lancar');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    void apiGet<StudentItem[]>('/api/students')
+      .then((items) => {
+        setStudents(items);
+        setSelectedSiswa((current) => current ?? items[0]?.id ?? null);
+      })
+      .catch(() => showToast('Gagal memuat data siswa dari backend.', 'error'));
+  }, []);
+
+  const loadSubmissions = async () => {
+    const items = await apiGet<QuranSubmissionItem[]>('/api/quran-submissions');
+    setSubmissions(items);
+  };
+
+  useEffect(() => {
+    void loadSubmissions().catch(() =>
+      showToast('Gagal memuat setoran Qur\'an dari backend.', 'error')
+    );
+  }, []);
+
+  const progressByNis = useMemo(
+    () =>
+      submissions.reduce<Record<string, number>>((accumulator, item) => {
+        accumulator[item.nis] = Math.max(accumulator[item.nis] ?? 0, item.progress ?? 0);
+        return accumulator;
+      }, {}),
+    [submissions]
+  );
+
+  const siswaData = useMemo(
+    () =>
+      students.map((student) => ({
+        ...student,
+        progress: progressByNis[student.nis] ?? 0,
+      })),
+    [students, progressByNis]
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast('Setoran Al-Qur\'an berhasil disimpan!', 'success');
-    setSurah('');
-    setAyatMulai('');
-    setAyatSelesai('');
-    setKeterangan('');
+
+    if (isSaving) {
+      return;
+    }
+
+    const selectedStudent = siswaData.find((s) => s.id === selectedSiswa);
+    if (!selectedStudent) {
+      showToast('Pilih siswa dari data backend terlebih dahulu.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const savedSubmission = await apiPost<QuranSubmissionItem>('/api/quran-submissions', {
+        nis: selectedStudent.nis,
+        nama: selectedStudent.nama,
+        kelas: selectedStudent.kelas,
+        tanggal,
+        surah: surah.trim(),
+        ayatMulai: Number(ayatMulai),
+        ayatSelesai: Number(ayatSelesai),
+        penilaian: nilai,
+        keterangan: keterangan.trim() || null,
+        progress: selectedStudent.progress,
+      });
+
+      setSubmissions((current) => upsertQuranSubmission(current, savedSubmission));
+      showToast('Setoran Al-Qur\'an berhasil disimpan ke backend!', 'success');
+      setSurah('');
+      setAyatMulai('');
+      setAyatSelesai('');
+      setKeterangan('');
+    } catch {
+      showToast('Gagal menyimpan setoran Al-Qur\'an ke backend.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const selectedStudent = siswaData.find((s) => s.id === selectedSiswa);
@@ -120,12 +189,12 @@ export default function SetoranQuran() {
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
               <p className="font-semibold text-green-900 mb-2">
-                {selectedStudent?.nama}
+                {selectedStudent?.nama || '-'}
               </p>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-green-700">Progress Hafalan</span>
                 <span className="font-bold text-green-900">
-                  {selectedStudent?.progress} / 30 Juz ({progressPercent.toFixed(0)}%)
+                  {selectedStudent?.progress ?? 0} / 30 Juz ({progressPercent.toFixed(0)}%)
                 </span>
               </div>
               <div className="w-full bg-green-200 rounded-full h-3 mt-2">
@@ -161,7 +230,7 @@ export default function SetoranQuran() {
                     type="text"
                     value={surah}
                     onChange={(e) => setSurah(e.target.value)}
-                    placeholder="Contoh: Al-Baqarah"
+                    placeholder="Nama surah"
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
                   />
@@ -250,3 +319,11 @@ export default function SetoranQuran() {
     </div>
   );
 }
+
+const upsertQuranSubmission = (
+  items: QuranSubmissionItem[],
+  nextItem: QuranSubmissionItem
+) =>
+  items.some((item) => item.id === nextItem.id)
+    ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
+    : [nextItem, ...items];

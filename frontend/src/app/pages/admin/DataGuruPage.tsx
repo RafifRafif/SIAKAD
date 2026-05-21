@@ -5,10 +5,10 @@ import { Search, Plus, Edit, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
-import { defaultGuruData, GURU_STORAGE_KEY, type GuruItem as Guru } from '../../lib/guruStore';
+import { apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
+import { defaultGuruData, type GuruItem as Guru } from '../../lib/guruStore';
 import {
   defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
@@ -23,12 +23,13 @@ export default function DataGuruPage() {
   );
   const [showModal, setShowModal] = useState(false);
   const [editingGuru, setEditingGuru] = useState<Guru | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
     nip: '',
     nama: '',
-    tahunAjaran: '2025/2026 Genap',
+    tahunAjaran: '',
     role: ['Guru Mapel'] as ('Wali Kelas' | 'Guru Mapel')[],
     email: '',
     telepon: '',
@@ -36,54 +37,21 @@ export default function DataGuruPage() {
   });
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(GURU_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as Guru[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setGuru(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
-    }
+    void apiGet<Guru[]>('/api/teachers')
+      .then(setGuru)
+      .catch(() => showToast('Gagal memuat data guru dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaranOptions(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
+    void apiGet<TahunAjaranItem[]>('/api/academic-years')
+      .then(setTahunAjaranOptions)
+      .catch(() => showToast('Gagal memuat tahun ajaran dari backend.', 'error'));
   }, []);
 
   const tahunAjaranList = useMemo(
     () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
     [tahunAjaranOptions]
   );
-
-  const syncGuru = (nextGuru: Guru[]) => {
-    setGuru(nextGuru);
-    window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(nextGuru));
-  };
 
   const filteredGuru = guru.filter((g) => {
     const matchesSearch =
@@ -100,7 +68,7 @@ export default function DataGuruPage() {
     setFormData({
       nip: '',
       nama: '',
-      tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
+      tahunAjaran: tahunAjaranList[1] ?? '',
       role: ['Guru Mapel'],
       email: '',
       telepon: '',
@@ -115,10 +83,15 @@ export default function DataGuruPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Apakah Anda yakin ingin menghapus data guru ini?')) {
-      syncGuru(guru.filter((g) => g.id !== id));
-      showToast('Data guru berhasil dihapus!', 'success');
+      try {
+        await apiDelete(`/api/teachers/${id}`);
+        setGuru((current) => current.filter((g) => g.id !== id));
+        showToast('Data guru berhasil dihapus!', 'success');
+      } catch {
+        showToast('Gagal menghapus data guru.', 'error');
+      }
     }
   };
 
@@ -143,17 +116,40 @@ export default function DataGuruPage() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingGuru) {
-      syncGuru(guru.map((g) => (g.id === editingGuru.id ? { ...formData, id: g.id } : g)));
-      showToast('Data guru berhasil diupdate!', 'success');
-    } else {
-      const newGuru = { ...formData, id: Date.now() };
-      syncGuru([...guru, newGuru]);
-      showToast('Guru baru berhasil ditambahkan!', 'success');
+
+    if (isSaving) {
+      return;
     }
-    setShowModal(false);
+
+    setIsSaving(true);
+
+    try {
+      const payload = {
+        ...formData,
+        nip: formData.nip.trim(),
+        nama: formData.nama.trim(),
+        tahunAjaran: formData.tahunAjaran.trim(),
+        email: formData.email.trim(),
+        telepon: formData.telepon.trim(),
+      };
+
+      if (editingGuru) {
+        const updatedGuru = await apiPut<Guru>(`/api/teachers/${editingGuru.id}`, payload);
+        setGuru((current) => upsertGuru(current, updatedGuru));
+        showToast('Data guru berhasil diupdate!', 'success');
+      } else {
+        const newGuru = await apiPost<Guru>('/api/teachers', payload);
+        setGuru((current) => upsertGuru(current, newGuru));
+        showToast('Guru baru berhasil ditambahkan!', 'success');
+      }
+      setShowModal(false);
+    } catch {
+      showToast('Gagal menyimpan data guru.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -461,3 +457,8 @@ export default function DataGuruPage() {
     </div>
   );
 }
+
+const upsertGuru = (items: Guru[], nextItem: Guru) =>
+  items.some((item) => item.id === nextItem.id)
+    ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
+    : [...items, nextItem];

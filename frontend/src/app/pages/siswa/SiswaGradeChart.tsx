@@ -1,19 +1,45 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-const gradeData = [
-  { bulan: 'Sep', rata: 82 },
-  { bulan: 'Okt', rata: 85 },
-  { bulan: 'Nov', rata: 83 },
-  { bulan: 'Des', rata: 87 },
-  { bulan: 'Jan', rata: 89 },
-  { bulan: 'Feb', rata: 88 },
-  { bulan: 'Mar', rata: 91 },
-];
+import { getAuthSession } from '../../lib/authStore';
+import {
+  getGrades,
+  monthLabelFromDate,
+  type StudentGradeItem,
+} from '../../lib/academicActivityStore';
 
 export default function SiswaGradeChart() {
+  const [grades, setGrades] = useState<StudentGradeItem[]>([]);
+
+  useEffect(() => {
+    const loadGrades = async () => {
+      const session = await getAuthSession();
+      const items = await getGrades(session?.username ? { nis: session.username } : {});
+      setGrades(items);
+    };
+
+    void loadGrades().catch(() => setGrades([]));
+  }, []);
+
+  const gradeData = useMemo(() => {
+    const grouped = new Map<string, { bulan: string; total: number; count: number }>();
+
+    grades.forEach((grade) => {
+      const bulan = monthLabelFromDate(grade.tanggal) || '-';
+      const existing = grouped.get(bulan) ?? { bulan, total: 0, count: 0 };
+      existing.total += Number(grade.nilai);
+      existing.count += 1;
+      grouped.set(bulan, existing);
+    });
+
+    return Array.from(grouped.values()).map((item) => ({
+      bulan: item.bulan,
+      rata: item.count > 0 ? Number((item.total / item.count).toFixed(2)) : 0,
+    }));
+  }, [grades]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

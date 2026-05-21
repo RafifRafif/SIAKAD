@@ -18,7 +18,7 @@ import {
   X,
   ChevronDown,
 } from 'lucide-react';
-import { clearAuthSession, getCurrentGuruAccess, type GuruAccess } from '../lib/authStore';
+import { clearAuthSession, getAuthSession, type GuruAccess } from '../lib/authStore';
 
 interface DashboardLayoutProps {
   role: 'admin' | 'guru' | 'siswa';
@@ -46,11 +46,11 @@ const menuItems: Record<StaticDashboardRole, MenuItem[]> = {
       icon: FolderTree,
       label: 'Manajemen Data',
       children: [
-        { label: 'Data Siswa', path: '/admin/siswa' },
         { label: 'Data Guru', path: '/admin/guru' },
         { label: 'Data Kelas', path: '/admin/kelas' },
         { label: 'Data Pelajaran', path: '/admin/data-pelajaran' },
         { label: 'Data Pembelajaran', path: '/admin/pelajaran' },
+        { label: 'Data Siswa', path: '/admin/siswa' },
         { label: 'Bobot Penilaian', path: '/admin/bobot-penilaian' },
       ],
     },
@@ -112,6 +112,7 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
     'Guru Mapel': true,
   });
   const [guruAccess, setGuruAccess] = useState<GuruAccess[]>([]);
+  const [displayName, setDisplayName] = useState('');
   const currentPath = pathname ?? '/';
   const currentMenu = useMemo(
     () => (role === 'guru' ? getGuruMenuItems(guruAccess) : menuItems[role]),
@@ -123,9 +124,21 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
       : roleNames[role];
 
   useEffect(() => {
-    if (role === 'guru') {
-      setGuruAccess(getCurrentGuruAccess());
-    }
+    void getAuthSession()
+      .then((session) => {
+        setDisplayName(session?.displayName ?? '');
+
+        if (role === 'guru') {
+          setGuruAccess(session?.guruAccess ?? []);
+        }
+      })
+      .catch(() => {
+        setDisplayName('');
+
+        if (role === 'guru') {
+          setGuruAccess([]);
+        }
+      });
   }, [role]);
 
   const isMenuActive = (item: MenuItem) => {
@@ -310,10 +323,12 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
                 className="flex items-center gap-3 rounded-lg px-4 py-2 transition-colors hover:bg-gray-100"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#2563EB] to-blue-400 font-semibold text-white">
-                  {roleNames[role].charAt(0)}
+                  {(displayName || roleNames[role]).charAt(0)}
                 </div>
                 <div className="hidden text-left sm:block">
-                  <div className="text-sm font-semibold text-gray-900">{displayRole}</div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {displayName || displayRole}
+                  </div>
                   <div className="text-xs text-gray-600">View Profile</div>
                 </div>
                 <ChevronDown size={16} className="text-gray-600" />
@@ -338,8 +353,9 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
                     <hr className="my-2 border-gray-200" />
                     <button
                       onClick={() => {
-                        clearAuthSession();
-                        void router.push('/login');
+                        void clearAuthSession().finally(() => {
+                          void router.push('/login');
+                        });
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
                     >

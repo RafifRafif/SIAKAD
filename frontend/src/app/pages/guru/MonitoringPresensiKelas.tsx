@@ -1,163 +1,20 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ClipboardList } from 'lucide-react';
+import {
+  getAttendanceRecords,
+  monthLabelFromDate,
+  uniqueValues,
+  type AttendanceRecordItem,
+} from '../../lib/academicActivityStore';
 
 type StatusHarian = 'H' | 'A' | 'S' | 'I' | '-';
 
-const tanggalPresensi = Array.from({ length: 30 }, (_, index) =>
+const tanggalPresensi = Array.from({ length: 31 }, (_, index) =>
   String(index + 1).padStart(2, '0')
 );
-
-const mataPelajaranOptions = ['Matematika', 'Bahasa Indonesia', 'Bahasa Inggris'];
-const bulanOptions = ['April 2026', 'Mei 2026', 'Juni 2026'];
-
-const getRekapKey = (mataPelajaran: string, bulan: string) => `${mataPelajaran}|${bulan}`;
-
-const daftarSiswa: Array<{
-  id: number;
-  siswaId: string;
-  nama: string;
-  rekapPresensi: Record<string, Partial<Record<string, StatusHarian>>>;
-}> = [
-  {
-    id: 1,
-    siswaId: '2024001',
-    nama: 'Ahmad Fauzi',
-    rekapPresensi: {
-      [getRekapKey('Matematika', 'April 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '03': 'H',
-        '04': 'I',
-        '05': 'H',
-        '08': 'H',
-        '09': 'H',
-        '10': 'S',
-      },
-      [getRekapKey('Bahasa Indonesia', 'April 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '03': 'H',
-        '04': 'H',
-        '05': 'H',
-        '08': 'A',
-        '09': 'H',
-        '10': 'H',
-      },
-      [getRekapKey('Matematika', 'Mei 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '04': 'S',
-        '05': 'H',
-        '06': 'H',
-      },
-    },
-  },
-  {
-    id: 2,
-    siswaId: '2024002',
-    nama: 'Siti Nurhaliza',
-    rekapPresensi: {
-      [getRekapKey('Matematika', 'April 2026')]: {
-        '01': 'H',
-        '02': 'S',
-        '03': 'S',
-        '04': 'H',
-        '05': 'H',
-        '08': 'H',
-        '09': 'I',
-        '10': 'H',
-      },
-      [getRekapKey('Bahasa Indonesia', 'April 2026')]: {
-        '01': 'H',
-        '02': 'I',
-        '03': 'H',
-        '04': 'H',
-        '05': 'H',
-        '08': 'H',
-        '09': 'H',
-        '10': 'S',
-      },
-      [getRekapKey('Matematika', 'Mei 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '04': 'H',
-        '05': 'I',
-        '06': 'H',
-      },
-    },
-  },
-  {
-    id: 3,
-    siswaId: '2024003',
-    nama: 'Muhammad Rizki',
-    rekapPresensi: {
-      [getRekapKey('Matematika', 'April 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '03': 'A',
-        '04': 'H',
-        '05': 'H',
-        '08': 'H',
-        '09': 'H',
-        '10': 'H',
-      },
-      [getRekapKey('Bahasa Indonesia', 'April 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '03': 'H',
-        '04': 'A',
-        '05': 'H',
-        '08': 'H',
-        '09': 'H',
-        '10': 'H',
-      },
-      [getRekapKey('Matematika', 'Mei 2026')]: {
-        '01': 'H',
-        '02': 'A',
-        '04': 'H',
-        '05': 'H',
-        '06': 'H',
-      },
-    },
-  },
-  {
-    id: 4,
-    siswaId: '2024004',
-    nama: 'Fatimah Azzahra',
-    rekapPresensi: {
-      [getRekapKey('Matematika', 'April 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '03': 'H',
-        '04': 'H',
-        '05': 'I',
-        '08': 'H',
-        '09': 'H',
-        '10': 'H',
-      },
-      [getRekapKey('Bahasa Indonesia', 'April 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '03': 'S',
-        '04': 'H',
-        '05': 'H',
-        '08': 'H',
-        '09': 'H',
-        '10': 'H',
-      },
-      [getRekapKey('Matematika', 'Mei 2026')]: {
-        '01': 'H',
-        '02': 'H',
-        '04': 'H',
-        '05': 'H',
-        '06': 'S',
-      },
-    },
-  },
-];
 
 const statusStyles: Record<StatusHarian, string> = {
   H: 'bg-green-50 text-green-700 ring-green-200',
@@ -179,20 +36,83 @@ const countStatus = (
   statusToCount: Exclude<StatusHarian, '-'>
 ) => Object.values(presensi).filter((status) => status === statusToCount).length;
 
+const dayFromDate = (value?: string | null) => {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return String(date.getDate()).padStart(2, '0');
+};
+
 export default function MonitoringPresensiKelas() {
-  const [selectedMataPelajaran, setSelectedMataPelajaran] = useState(mataPelajaranOptions[0]);
-  const [selectedBulan, setSelectedBulan] = useState(bulanOptions[0]);
-  const rekapKey = getRekapKey(selectedMataPelajaran, selectedBulan);
-  const daftarPresensiSiswa = useMemo(
-    () =>
-      daftarSiswa.map((siswa) => ({
-        id: siswa.id,
-        siswaId: siswa.siswaId,
-        nama: siswa.nama,
-        presensi: siswa.rekapPresensi[rekapKey] ?? {},
-      })),
-    [rekapKey]
+  const [records, setRecords] = useState<AttendanceRecordItem[]>([]);
+  const [selectedMataPelajaran, setSelectedMataPelajaran] = useState('');
+  const [selectedBulan, setSelectedBulan] = useState('');
+
+  useEffect(() => {
+    void getAttendanceRecords()
+      .then((items) => {
+        setRecords(items);
+        setSelectedMataPelajaran((current) => current || items[0]?.mapel || '');
+        setSelectedBulan((current) => current || monthLabelFromDate(items[0]?.tanggal));
+      })
+      .catch(() => setRecords([]));
+  }, []);
+
+  const mataPelajaranOptions = useMemo(
+    () => uniqueValues(records.map((record) => record.mapel)),
+    [records]
   );
+  const bulanOptions = useMemo(
+    () => uniqueValues(records.map((record) => monthLabelFromDate(record.tanggal))),
+    [records]
+  );
+
+  const daftarPresensiSiswa = useMemo(() => {
+    const filteredRecords = records.filter((record) => {
+      const matchMapel =
+        !selectedMataPelajaran || record.mapel === selectedMataPelajaran;
+      const matchBulan =
+        !selectedBulan || monthLabelFromDate(record.tanggal) === selectedBulan;
+
+      return matchMapel && matchBulan;
+    });
+    const grouped = new Map<
+      string,
+      {
+        id: string;
+        siswaId: string;
+        nama: string;
+        presensi: Partial<Record<string, StatusHarian>>;
+      }
+    >();
+
+    filteredRecords.forEach((record) => {
+      const existing =
+        grouped.get(record.nis) ??
+        {
+          id: record.nis,
+          siswaId: record.nis,
+          nama: record.nama,
+          presensi: {},
+        };
+      const day = dayFromDate(record.tanggal);
+
+      if (day) {
+        existing.presensi[day] = record.statusCode;
+      }
+
+      grouped.set(record.nis, existing);
+    });
+
+    return Array.from(grouped.values());
+  }, [records, selectedBulan, selectedMataPelajaran]);
+
   const statusTerisi = daftarPresensiSiswa.flatMap((item) => Object.values(item.presensi));
   const totalHadir = statusTerisi.filter((status) => status === 'H').length;
   const totalAlpha = statusTerisi.filter((status) => status === 'A').length;

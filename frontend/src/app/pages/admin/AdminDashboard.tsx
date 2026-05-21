@@ -1,9 +1,16 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Users, GraduationCap, ClipboardCheck, TrendingUp } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { motion } from 'motion/react';
+import {
+  emptyDashboardSummary,
+  formatDisplayDate,
+  getDashboardSummary,
+  type DashboardSummary,
+} from '../../lib/academicActivityStore';
 
 const AdminDashboardCharts = dynamic(() => import('./AdminDashboardCharts'), {
   ssr: false,
@@ -27,12 +34,38 @@ function ChartGridSkeleton() {
 }
 
 export default function AdminDashboard() {
+  const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
+
+  useEffect(() => {
+    void getDashboardSummary()
+      .then(setSummary)
+      .catch(() => setSummary(emptyDashboardSummary));
+  }, []);
+
+  const recentActivities = useMemo(
+    () => [
+      ...summary.siswa.nilaiTerbaru.map((item) => ({
+        time: formatDisplayDate(item.tanggal),
+        action: `Nilai ${item.mapel} ${item.nama} tersimpan dari backend`,
+      })),
+      ...summary.siswa.presensiTerbaru.map((item) => ({
+        time: formatDisplayDate(item.tanggal),
+        action: `Presensi ${item.nama} tercatat ${item.status}`,
+      })),
+      ...summary.siswa.quranTerbaru.map((item) => ({
+        time: formatDisplayDate(item.tanggal),
+        action: `Setoran Qur'an ${item.nama} tercatat`,
+      })),
+    ],
+    [summary]
+  );
+
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Selamat Datang, Admin! 👋
+          Selamat Datang, Admin!
         </h2>
         <p className="text-gray-600">
           Berikut adalah ringkasan sistem informasi akademik hari ini
@@ -44,25 +77,25 @@ export default function AdminDashboard() {
         <StatCard
           icon={Users}
           label="Total Siswa"
-          value="524"
+          value={String(summary.admin.totalSiswa)}
           color="bg-blue-100 text-blue-600"
         />
         <StatCard
           icon={GraduationCap}
           label="Total Guru"
-          value="48"
+          value={String(summary.admin.totalGuru)}
           color="bg-green-100 text-green-600"
         />
         <StatCard
           icon={ClipboardCheck}
           label="Presensi Hari Ini"
-          value="98%"
+          value={summary.admin.presensiHariIni === null ? '0%' : `${summary.admin.presensiHariIni}%`}
           color="bg-purple-100 text-purple-600"
         />
         <StatCard
           icon={TrendingUp}
           label="Rata-rata Nilai"
-          value="87.5"
+          value={summary.admin.rataRataNilai === null ? '0' : String(summary.admin.rataRataNilai)}
           color="bg-orange-100 text-orange-600"
         />
       </div>
@@ -80,14 +113,9 @@ export default function AdminDashboard() {
           Aktivitas Terbaru
         </h3>
         <div className="space-y-4">
-          {[
-            { time: '10 menit lalu', action: 'Guru Ustadzah Siti menambahkan nilai Matematika kelas XI-A' },
-            { time: '25 menit lalu', action: 'Admin menambahkan 5 siswa baru ke sistem' },
-            { time: '1 jam lalu', action: 'Presensi kelas X-B telah disubmit oleh Ustadz Ahmad' },
-            { time: '2 jam lalu', action: 'Laporan bulanan bulan Maret telah dibuat' },
-          ].map((activity, index) => (
+          {recentActivities.map((activity, index) => (
             <div
-              key={index}
+              key={`${activity.action}-${index}`}
               className="flex items-start gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <div className="w-2 h-2 bg-[#2563EB] rounded-full mt-2" />

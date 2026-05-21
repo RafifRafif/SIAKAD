@@ -4,80 +4,183 @@ import { useEffect, useMemo, useState } from 'react';
 import { Save } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
+import { apiGet, apiPost } from '../../lib/apiClient';
+import type { LearningAssignmentItem } from '../../lib/academicActivityStore';
 import {
-  BOBOT_PENILAIAN_STORAGE_KEY,
   defaultBobotPenilaianConfig,
   getGradeLabel,
+  type BobotPenilaianConfig,
   type BobotPenilaianItem,
   type GradeRangeItem,
 } from '../../lib/bobotPenilaianStore';
-
-const siswaData = [
-  { id: 1, nis: '2024001', nama: 'Ahmad Fauzi' },
-  { id: 2, nis: '2024002', nama: 'Siti Nurhaliza' },
-  { id: 3, nis: '2024003', nama: 'Muhammad Rizki' },
-  { id: 4, nis: '2024004', nama: 'Fatimah Azzahra' },
-  { id: 5, nis: '2024005', nama: 'Abdullah Rahman' },
-];
+import type { KelasItem } from '../../lib/kelasStore';
+import type { MasterPelajaran } from '../../lib/pelajaranStore';
+import type { StudentItem } from '../../lib/siswaStore';
 
 export default function InputNilai() {
-  const [selectedKelas, setSelectedKelas] = useState('X-A');
-  const [selectedMapel, setSelectedMapel] = useState('Matematika');
-  const [jenisPenilaian, setJenisPenilaian] = useState('UTS');
-  const [tanggalSekarang] = useState(() => new Date().toISOString().split('T')[0]);
+  const [students, setStudents] = useState<StudentItem[]>([]);
+  const [learningAssignments, setLearningAssignments] = useState<LearningAssignmentItem[]>([]);
+  const [selectedKelas, setSelectedKelas] = useState('');
+  const [selectedMapel, setSelectedMapel] = useState('');
+  const [jenisPenilaian, setJenisPenilaian] = useState('');
+  const [tanggalSekarang, setTanggalSekarang] = useState('');
   const [bobotPenilaian, setBobotPenilaian] = useState<BobotPenilaianItem[]>(
     defaultBobotPenilaianConfig.bobot
   );
   const [gradeRanges, setGradeRanges] = useState<GradeRangeItem[]>(
     defaultBobotPenilaianConfig.gradeRanges
   );
-  const [nilai, setNilai] = useState<{ [key: number]: string }>(
-    Object.fromEntries(siswaData.map((s) => [s.id, '']))
-  );
+  const [nilai, setNilai] = useState<{ [key: number]: string }>({});
+  const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
-    const storedConfig = window.localStorage.getItem(BOBOT_PENILAIAN_STORAGE_KEY);
-    if (!storedConfig) {
-      window.localStorage.setItem(
-        BOBOT_PENILAIAN_STORAGE_KEY,
-        JSON.stringify(defaultBobotPenilaianConfig)
-      );
-      return;
-    }
-
-    try {
-      const parsedConfig = JSON.parse(storedConfig) as typeof defaultBobotPenilaianConfig;
-      if (Array.isArray(parsedConfig.bobot) && Array.isArray(parsedConfig.gradeRanges)) {
-        setBobotPenilaian(parsedConfig.bobot);
-        setGradeRanges(parsedConfig.gradeRanges);
-      }
-    } catch {
-      window.localStorage.setItem(
-        BOBOT_PENILAIAN_STORAGE_KEY,
-        JSON.stringify(defaultBobotPenilaianConfig)
-      );
-    }
+    void apiGet<BobotPenilaianConfig>('/api/assessment-setting')
+      .then((config) => {
+        setBobotPenilaian(config.bobot);
+        setGradeRanges(config.gradeRanges);
+      })
+      .catch(() => showToast('Gagal memuat bobot penilaian dari backend.', 'error'));
   }, []);
+
+  useEffect(() => {
+    void apiGet<StudentItem[]>('/api/students')
+      .then((items) => {
+        setStudents(items);
+        setNilai(Object.fromEntries(items.map((student) => [student.id, ''])));
+      })
+      .catch(() => showToast('Gagal memuat data siswa dari backend.', 'error'));
+  }, []);
+
+  useEffect(() => {
+    void apiGet<LearningAssignmentItem[]>('/api/learning-assignments')
+      .then(setLearningAssignments)
+      .catch(() => showToast('Gagal memuat data pelajaran yang diampu dari backend.', 'error'));
+  }, []);
+
+  const kelasOptions = useMemo<KelasItem[]>(
+    () =>
+      Array.from(
+        new Map(
+          learningAssignments.map((item) => [
+            item.kelas,
+            {
+              id: item.id,
+              nama: item.kelas,
+              tahunAjaran: item.tahunAjaran,
+              kelompok: item.kelompok,
+              waliKelas: '',
+              jumlahSiswa: 0,
+            },
+          ])
+        ).values()
+      ),
+    [learningAssignments]
+  );
+
+  const mapelOptions = useMemo<MasterPelajaran[]>(
+    () =>
+      Array.from(
+        new Map(
+          learningAssignments
+            .filter((item) => !selectedKelas || item.kelas === selectedKelas)
+            .map((item) => [
+              item.nama,
+              {
+                id: item.id,
+                nama: item.nama,
+                tahunAjaran: item.tahunAjaran,
+              },
+            ])
+        ).values()
+      ),
+    [learningAssignments, selectedKelas]
+  );
+
+  useEffect(() => {
+    setSelectedKelas((current) =>
+      current && kelasOptions.some((kelas) => kelas.nama === current)
+        ? current
+        : kelasOptions[0]?.nama ?? ''
+    );
+  }, [kelasOptions]);
+
+  useEffect(() => {
+    setSelectedMapel((current) =>
+      current && mapelOptions.some((mapel) => mapel.nama === current)
+        ? current
+        : mapelOptions[0]?.nama ?? ''
+    );
+  }, [mapelOptions]);
+
+  const siswaData = useMemo(
+    () =>
+      selectedKelas
+        ? students.filter((student) => student.kelas === selectedKelas)
+        : [],
+    [selectedKelas, students]
+  );
 
   const handleNilaiChange = (id: number, value: string) => {
     const numValue = parseInt(value);
     if (value === '' || (numValue >= 0 && numValue <= 100)) {
-      setNilai({ ...nilai, [id]: value });
+      setNilai((current) => ({ ...current, [id]: value }));
     }
   };
 
-  const handleSubmit = () => {
-    const allFilled = Object.values(nilai).every((n) => n !== '');
+  const handleSubmit = async () => {
+    if (isSaving) {
+      return;
+    }
+
+    if (!selectedKelas || !selectedMapel || !jenisPenilaian || !tanggalSekarang) {
+      showToast('Pilih kelas, mata pelajaran, jenis penilaian, dan tanggal terlebih dahulu.', 'error');
+      return;
+    }
+
+    if (siswaData.length === 0) {
+      showToast('Belum ada data siswa dari backend.', 'error');
+      return;
+    }
+
+    const allFilled = siswaData.every((student) => nilai[student.id] !== '');
     if (!allFilled) {
       showToast('Harap isi nilai semua siswa!', 'error');
       return;
     }
-    showToast('Nilai berhasil disimpan!', 'success');
+
+    setIsSaving(true);
+
+    try {
+      await Promise.all(
+        siswaData.map((student) =>
+          apiPost('/api/grades', {
+            nis: student.nis,
+            nama: student.nama,
+            kelas: student.kelas,
+            tahunAjaran: student.tahunAjaran,
+            mapel: selectedMapel,
+            jenis: jenisPenilaian,
+            nilai: Number(nilai[student.id]),
+            tanggal: tanggalSekarang,
+          })
+        )
+      );
+
+      showToast('Nilai berhasil disimpan ke backend!', 'success');
+    } catch {
+      showToast('Gagal menyimpan nilai ke backend.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getRataRata = () => {
-    const validNilai = Object.values(nilai).filter((n) => n !== '').map((n) => parseInt(n));
+    const validNilai = siswaData
+      .map((student) => nilai[student.id])
+      .filter((item) => item !== '')
+      .map((item) => parseInt(item));
+
     if (validNilai.length === 0) return 0;
     return (validNilai.reduce((a, b) => a + b, 0) / validNilai.length).toFixed(2);
   };
@@ -114,9 +217,14 @@ export default function InputNilai() {
               onChange={(e) => setSelectedKelas(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
-              <option>X-A</option>
-              <option>XI-B</option>
-              <option>XII-A</option>
+              <option value="" disabled>
+                Pilih kelas
+              </option>
+              {kelasOptions.map((kelas) => (
+                <option key={kelas.id} value={kelas.nama}>
+                  {kelas.nama}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -128,9 +236,14 @@ export default function InputNilai() {
               onChange={(e) => setSelectedMapel(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
-              <option>Matematika</option>
-              <option>Fisika</option>
-              <option>Kimia</option>
+              <option value="" disabled>
+                Pilih mata pelajaran
+              </option>
+              {mapelOptions.map((mapel) => (
+                <option key={mapel.id} value={mapel.nama}>
+                  {mapel.nama}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -142,10 +255,14 @@ export default function InputNilai() {
               onChange={(e) => setJenisPenilaian(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
-              <option>UTS</option>
-              <option>UAS</option>
-              <option>Tugas</option>
-              <option>Quiz</option>
+              <option value="" disabled>
+                Pilih jenis penilaian
+              </option>
+              {['UTS', 'UAS', 'Tugas', 'Quiz'].map((jenis) => (
+                <option key={jenis} value={jenis}>
+                  {jenis}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -153,10 +270,10 @@ export default function InputNilai() {
               Tanggal
             </label>
             <input
-              type="text"
+              type="date"
               value={tanggalSekarang}
-              readOnly
-              className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-gray-600 outline-none"
+              onChange={(e) => setTanggalSekarang(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
             />
           </div>
         </div>
@@ -165,9 +282,9 @@ export default function InputNilai() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-gray-900">Input Nilai - {selectedMapel}</h3>
+            <h3 className="font-semibold text-gray-900">Input Nilai - {selectedMapel || '-'}</h3>
             <p className="text-sm text-gray-600 mt-1">
-              Kelas {selectedKelas} - {jenisPenilaian}
+              Kelas {selectedKelas || '-'} - {jenisPenilaian}
             </p>
             <p className="mt-1 text-xs text-gray-500">
               Grade mengikuti pengaturan admin. Bobot {jenisPenilaian}: {bobotAktif}%
@@ -202,7 +319,8 @@ export default function InputNilai() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {siswaData.map((siswa, index) => {
-                const nilaiSiswa = parseInt(nilai[siswa.id] || '0');
+                const hasNilai = nilai[siswa.id] !== undefined && nilai[siswa.id] !== '';
+                const nilaiSiswa = Number(nilai[siswa.id]);
                 const grade = getGradeLabel(nilaiSiswa, gradeRanges);
                 return (
                   <motion.tr
@@ -222,14 +340,14 @@ export default function InputNilai() {
                         type="number"
                         min="0"
                         max="100"
-                        value={nilai[siswa.id]}
+                        value={nilai[siswa.id] ?? ''}
                         onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
                         placeholder="0-100"
                         className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
                       />
                     </td>
                     <td className="px-6 py-4">
-                      {nilai[siswa.id] && (
+                      {hasNilai && !Number.isNaN(nilaiSiswa) && (
                         <span
                           className={`px-3 py-1 rounded-full font-medium ${
                             grade === 'A'

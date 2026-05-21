@@ -1,38 +1,101 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Download, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
+import { getAuthSession } from '../../lib/authStore';
+import { apiDownload } from '../../lib/apiClient';
+import {
+  getGrades,
+  getStudentInsights,
+  type StudentGradeItem,
+  type StudentInsights,
+} from '../../lib/academicActivityStore';
 
-const nilaiData = [
-  {
-    mapel: 'Matematika',
-    nilai: { tugas: 88, uts: 92, uas: 90, rata: 90 },
-  },
-  {
-    mapel: 'Bahasa Indonesia',
-    nilai: { tugas: 85, uts: 87, uas: 89, rata: 87 },
-  },
-  {
-    mapel: 'Bahasa Inggris',
-    nilai: { tugas: 90, uts: 88, uas: 92, rata: 90 },
-  },
-  {
-    mapel: 'Fisika',
-    nilai: { tugas: 82, uts: 85, uas: 87, rata: 85 },
-  },
-  {
-    mapel: 'Kimia',
-    nilai: { tugas: 88, uts: 90, uas: 89, rata: 89 },
-  },
-  {
-    mapel: 'Biologi',
-    nilai: { tugas: 91, uts: 89, uas: 92, rata: 91 },
-  },
-];
+interface NilaiMapel {
+  mapel: string;
+  tahunAjaran: string;
+  nilai: {
+    tugas: number | null;
+    uts: number | null;
+    uas: number | null;
+    rata: number;
+  };
+  grade: string;
+}
+
+const gradeFromAverage = (average: number) =>
+  average >= 90 ? 'A' : average >= 80 ? 'B' : average >= 70 ? 'C' : average >= 60 ? 'D' : 'E';
 
 export default function NilaiSiswa() {
+  const [grades, setGrades] = useState<StudentGradeItem[]>([]);
+  const [insights, setInsights] = useState<StudentInsights>({
+    rank: null,
+    classSize: 0,
+    notes: [],
+    achievements: [],
+  });
+
+  useEffect(() => {
+    const loadGrades = async () => {
+      const session = await getAuthSession();
+      const params = session?.username ? { nis: session.username } : {};
+      const [items, insightItems] = await Promise.all([
+        getGrades(params),
+        getStudentInsights(params),
+      ]);
+
+      setGrades(items);
+      setInsights(insightItems);
+    };
+
+    void loadGrades().catch(() => {
+      setGrades([]);
+      setInsights({ rank: null, classSize: 0, notes: [], achievements: [] });
+    });
+  }, []);
+
+  const nilaiData = useMemo<NilaiMapel[]>(() => {
+    const grouped = new Map<string, StudentGradeItem[]>();
+
+    grades.forEach((grade) => {
+      const current = grouped.get(grade.mapel) ?? [];
+      current.push(grade);
+      grouped.set(grade.mapel, current);
+    });
+
+    return Array.from(grouped.entries()).map(([mapel, items]) => {
+      const nilaiByJenis = (jenis: string) =>
+        items.find((item) => item.jenis.toLowerCase() === jenis)?.nilai ?? null;
+      const average =
+        items.reduce((total, item) => total + Number(item.nilai), 0) / items.length;
+
+      return {
+        mapel,
+        tahunAjaran: items[0]?.tahunAjaran ?? '',
+        nilai: {
+          tugas: nilaiByJenis('tugas'),
+          uts: nilaiByJenis('uts'),
+          uas: nilaiByJenis('uas'),
+          rata: Number(average.toFixed(2)),
+        },
+        grade: gradeFromAverage(average),
+      };
+    });
+  }, [grades]);
+
   const rataRataTotal =
-    nilaiData.reduce((sum, item) => sum + item.nilai.rata, 0) / nilaiData.length;
+    nilaiData.length > 0
+      ? nilaiData.reduce((sum, item) => sum + item.nilai.rata, 0) / nilaiData.length
+      : 0;
+  const gradeTotal = gradeFromAverage(rataRataTotal);
+  const semesterLabel = nilaiData[0]?.tahunAjaran || '-';
+  const rankLabel = insights.rank ? `${insights.rank}/${insights.classSize}` : '-';
+  const latestNote = insights.notes[0];
+  const latestAchievement = insights.achievements[0];
+  const handleDownloadRapor = () => {
+    void apiDownload('/api/reports/student/rapor', 'rapor-siswa.pdf');
+  };
 
   return (
     <div className="space-y-6">
@@ -41,7 +104,10 @@ export default function NilaiSiswa() {
           <h2 className="text-2xl font-bold text-gray-900">Nilai & Rapor</h2>
           <p className="text-gray-600 mt-1">Lihat nilai dan download rapor</p>
         </div>
-        <button className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-all font-medium shadow-md">
+        <button
+          onClick={handleDownloadRapor}
+          className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-all font-medium shadow-md"
+        >
           <Download size={20} />
           <span>Download Rapor</span>
         </button>
@@ -52,7 +118,7 @@ export default function NilaiSiswa() {
         <div className="grid sm:grid-cols-3 gap-6">
           <div>
             <p className="text-blue-100 mb-2">Semester</p>
-            <p className="text-2xl font-bold">Genap 2025/2026</p>
+            <p className="text-2xl font-bold">{semesterLabel}</p>
           </div>
           <div>
             <p className="text-blue-100 mb-2">Rata-rata Keseluruhan</p>
@@ -60,7 +126,7 @@ export default function NilaiSiswa() {
           </div>
           <div>
             <p className="text-blue-100 mb-2">Peringkat Kelas</p>
-            <p className="text-2xl font-bold">5 / 30</p>
+            <p className="text-2xl font-bold">{rankLabel}</p>
           </div>
         </div>
       </div>
@@ -98,56 +164,46 @@ export default function NilaiSiswa() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {nilaiData.map((item, index) => {
-                const grade =
-                  item.nilai.rata >= 90
-                    ? 'A'
-                    : item.nilai.rata >= 80
-                    ? 'B'
-                    : item.nilai.rata >= 70
-                    ? 'C'
-                    : 'D';
-                return (
-                  <motion.tr
-                    key={item.mapel}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="hover:bg-gray-50"
-                  >
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                      {item.mapel}
-                    </td>
-                    <td className="px-6 py-4 text-center text-sm text-gray-900">
-                      {item.nilai.tugas}
-                    </td>
-                    <td className="px-6 py-4 text-center text-sm text-gray-900">
-                      {item.nilai.uts}
-                    </td>
-                    <td className="px-6 py-4 text-center text-sm text-gray-900">
-                      {item.nilai.uas}
-                    </td>
-                    <td className="px-6 py-4 text-center text-sm font-bold text-gray-900">
-                      {item.nilai.rata}
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span
-                        className={`px-4 py-1 rounded-full font-bold ${
-                          grade === 'A'
-                            ? 'bg-green-100 text-green-700'
-                            : grade === 'B'
-                            ? 'bg-blue-100 text-blue-700'
-                            : grade === 'C'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}
-                      >
-                        {grade}
-                      </span>
-                    </td>
-                  </motion.tr>
-                );
-              })}
+              {nilaiData.map((item, index) => (
+                <motion.tr
+                  key={item.mapel}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="hover:bg-gray-50"
+                >
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    {item.mapel}
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm text-gray-900">
+                    {item.nilai.tugas ?? '-'}
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm text-gray-900">
+                    {item.nilai.uts ?? '-'}
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm text-gray-900">
+                    {item.nilai.uas ?? '-'}
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm font-bold text-gray-900">
+                    {item.nilai.rata}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span
+                      className={`px-4 py-1 rounded-full font-bold ${
+                        item.grade === 'A'
+                          ? 'bg-green-100 text-green-700'
+                          : item.grade === 'B'
+                          ? 'bg-blue-100 text-blue-700'
+                          : item.grade === 'C'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {item.grade}
+                    </span>
+                  </td>
+                </motion.tr>
+              ))}
             </tbody>
             <tfoot className="bg-gray-50 border-t-2 border-gray-300">
               <tr>
@@ -159,7 +215,7 @@ export default function NilaiSiswa() {
                 </td>
                 <td className="px-6 py-4 text-center">
                   <span className="px-4 py-1 bg-green-100 text-green-700 rounded-full font-bold">
-                    A
+                    {gradeTotal}
                   </span>
                 </td>
               </tr>
@@ -182,8 +238,7 @@ export default function NilaiSiswa() {
             <h3 className="text-lg font-semibold text-gray-900">Catatan Guru</h3>
           </div>
           <p className="text-gray-700 leading-relaxed">
-            Siswa menunjukkan peningkatan yang baik dalam semua mata pelajaran. Pertahankan
-            prestasi dan terus tingkatkan hafalan Al-Qur'an.
+            {latestNote?.catatan ?? 'Belum ada catatan guru dari backend.'}
           </p>
         </motion.div>
 
@@ -199,16 +254,11 @@ export default function NilaiSiswa() {
             </div>
             <h3 className="text-lg font-semibold text-gray-900">Prestasi</h3>
           </div>
-          <ul className="space-y-2 text-gray-700">
-            <li className="flex items-start gap-2">
-              <span className="text-green-600">•</span>
-              <span>Juara 2 Olimpiade Matematika Tingkat Kota</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-green-600">•</span>
-              <span>Hafal 7 Juz Al-Qur'an</span>
-            </li>
-          </ul>
+          <p className="text-gray-700">
+            {latestAchievement
+              ? `${latestAchievement.judul}${latestAchievement.keterangan ? ` - ${latestAchievement.keterangan}` : ''}`
+              : 'Belum ada data prestasi dari backend.'}
+          </p>
         </motion.div>
       </div>
     </div>

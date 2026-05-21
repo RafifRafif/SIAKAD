@@ -1,9 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
+import { apiGet, apiPost } from '../../lib/apiClient';
+import type { LearningAssignmentItem } from '../../lib/academicActivityStore';
+import type { KelasItem } from '../../lib/kelasStore';
+import type { MasterPelajaran } from '../../lib/pelajaranStore';
+import type { StudentItem } from '../../lib/siswaStore';
 
 type PresensiStatus = 'hadir' | 'alpha' | 'sakit' | 'izin';
 
@@ -39,24 +44,95 @@ const statusOptions: Array<{
   },
 ];
 
-const siswaData = [
-  { id: 1, nis: '2024001', nama: 'Ahmad Fauzi', status: null },
-  { id: 2, nis: '2024002', nama: 'Siti Nurhaliza', status: null },
-  { id: 3, nis: '2024003', nama: 'Muhammad Rizki', status: null },
-  { id: 4, nis: '2024004', nama: 'Fatimah Azzahra', status: null },
-  { id: 5, nis: '2024005', nama: 'Abdullah Rahman', status: null },
-];
-
 export default function PresensiGuru() {
-  const [selectedKelas, setSelectedKelas] = useState('X-A');
+  const [students, setStudents] = useState<StudentItem[]>([]);
+  const [learningAssignments, setLearningAssignments] = useState<LearningAssignmentItem[]>([]);
+  const [selectedKelas, setSelectedKelas] = useState('');
+  const [selectedMapel, setSelectedMapel] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
-  const [presensi, setPresensi] = useState<{ [key: number]: PresensiStatus | null }>(
-    Object.fromEntries(siswaData.map((s) => [s.id, null]))
-  );
-  const [keterangan, setKeterangan] = useState<{ [key: number]: string }>(
-    Object.fromEntries(siswaData.map((s) => [s.id, '']))
-  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [presensi, setPresensi] = useState<{ [key: number]: PresensiStatus | null }>({});
+  const [keterangan, setKeterangan] = useState<{ [key: number]: string }>({});
   const { toasts, showToast, removeToast } = useToast();
+
+  useEffect(() => {
+    void apiGet<StudentItem[]>('/api/students')
+      .then((items) => {
+        setStudents(items);
+        setPresensi(Object.fromEntries(items.map((student) => [student.id, null])));
+        setKeterangan(Object.fromEntries(items.map((student) => [student.id, ''])));
+      })
+      .catch(() => showToast('Gagal memuat data siswa dari backend.', 'error'));
+  }, []);
+
+  useEffect(() => {
+    void apiGet<LearningAssignmentItem[]>('/api/learning-assignments')
+      .then(setLearningAssignments)
+      .catch(() => showToast('Gagal memuat data pelajaran yang diampu dari backend.', 'error'));
+  }, []);
+
+  const kelasOptions = useMemo<KelasItem[]>(
+    () =>
+      Array.from(
+        new Map(
+          learningAssignments.map((item) => [
+            item.kelas,
+            {
+              id: item.id,
+              nama: item.kelas,
+              tahunAjaran: item.tahunAjaran,
+              kelompok: item.kelompok,
+              waliKelas: '',
+              jumlahSiswa: 0,
+            },
+          ])
+        ).values()
+      ),
+    [learningAssignments]
+  );
+
+  const mapelOptions = useMemo<MasterPelajaran[]>(
+    () =>
+      Array.from(
+        new Map(
+          learningAssignments
+            .filter((item) => !selectedKelas || item.kelas === selectedKelas)
+            .map((item) => [
+              item.nama,
+              {
+                id: item.id,
+                nama: item.nama,
+                tahunAjaran: item.tahunAjaran,
+              },
+            ])
+        ).values()
+      ),
+    [learningAssignments, selectedKelas]
+  );
+
+  useEffect(() => {
+    setSelectedKelas((current) =>
+      current && kelasOptions.some((kelas) => kelas.nama === current)
+        ? current
+        : kelasOptions[0]?.nama ?? ''
+    );
+  }, [kelasOptions]);
+
+  useEffect(() => {
+    setSelectedMapel((current) =>
+      current && mapelOptions.some((mapel) => mapel.nama === current)
+        ? current
+        : mapelOptions[0]?.nama ?? ''
+    );
+  }, [mapelOptions]);
+
+  const siswaData = useMemo(
+    () =>
+      selectedKelas
+        ? students.filter((student) => student.kelas === selectedKelas)
+        : students,
+    [selectedKelas, students]
+  );
 
   const handleToggle = (id: number, status: PresensiStatus) => {
     const nextStatus = presensi[id] === status ? null : status;
@@ -71,22 +147,59 @@ export default function PresensiGuru() {
     setKeterangan((current) => ({ ...current, [id]: value }));
   };
 
-  const handleSubmit = () => {
-    const allFilled = Object.values(presensi).every((status) => status !== null);
+  const handleSubmit = async () => {
+    if (isSaving) {
+      return;
+    }
+
+    if (!selectedMapel) {
+      showToast('Pilih mata pelajaran terlebih dahulu.', 'error');
+      return;
+    }
+
+    if (siswaData.length === 0) {
+      showToast('Belum ada data siswa dari backend.', 'error');
+      return;
+    }
+
+    const allFilled = siswaData.every((student) => presensi[student.id] !== null);
     if (!allFilled) {
       showToast('Harap isi presensi semua siswa!', 'error');
       return;
     }
 
     const invalidKeterangan = siswaData.some(
-      (siswa) => presensi[siswa.id] === 'izin' && !keterangan[siswa.id].trim()
+      (siswa) => presensi[siswa.id] === 'izin' && !keterangan[siswa.id]?.trim()
     );
     if (invalidKeterangan) {
       showToast('Lengkapi keterangan untuk siswa yang izin!', 'error');
       return;
     }
 
-    showToast('Presensi berhasil disimpan!', 'success');
+    setIsSaving(true);
+
+    try {
+      await Promise.all(
+        siswaData.map((student) =>
+          apiPost('/api/attendance-records', {
+            nis: student.nis,
+            nama: student.nama,
+            kelas: student.kelas,
+            tahunAjaran: student.tahunAjaran,
+            mapel: selectedMapel || null,
+            tanggal,
+            status: presensi[student.id],
+            keterangan: keterangan[student.id] || null,
+          })
+        )
+      );
+
+      showToast('Presensi berhasil disimpan ke backend!', 'success');
+    } catch {
+      showToast('Gagal menyimpan presensi ke backend.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -116,12 +229,11 @@ export default function PresensiGuru() {
               onChange={(e) => setSelectedKelas(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
-              <option>X-A</option>
-              <option>X-B</option>
-              <option>XI-A</option>
-              <option>XI-B</option>
-              <option>XII-A</option>
-              <option>XII-B</option>
+              {kelasOptions.map((kelas) => (
+                <option key={kelas.id} value={kelas.nama}>
+                  {kelas.nama}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -139,10 +251,16 @@ export default function PresensiGuru() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Mata Pelajaran
             </label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none">
-              <option>Matematika</option>
-              <option>Bahasa Indonesia</option>
-              <option>Bahasa Inggris</option>
+            <select
+              value={selectedMapel}
+              onChange={(e) => setSelectedMapel(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+            >
+              {mapelOptions.map((mapel) => (
+                <option key={mapel.id} value={mapel.nama}>
+                  {mapel.nama}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -150,7 +268,7 @@ export default function PresensiGuru() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900">Daftar Siswa - Kelas {selectedKelas}</h3>
+          <h3 className="font-semibold text-gray-900">Daftar Siswa - Kelas {selectedKelas || '-'}</h3>
           <p className="text-sm text-gray-600 mt-1">
             Pilih satu status presensi untuk setiap siswa
           </p>
@@ -209,7 +327,7 @@ export default function PresensiGuru() {
                   <td className="px-4 py-3">
                     <input
                       type="text"
-                      value={keterangan[siswa.id]}
+                      value={keterangan[siswa.id] ?? ''}
                       onChange={(event) => handleKeteranganChange(siswa.id, event.target.value)}
                       disabled={presensi[siswa.id] !== 'izin'}
                       placeholder={

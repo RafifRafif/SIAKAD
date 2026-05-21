@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   BarChart,
@@ -13,25 +14,76 @@ import {
   Line,
   Legend,
 } from 'recharts';
+import {
+  getAttendanceRecords,
+  getGrades,
+  monthLabelFromDate,
+  type AttendanceRecordItem,
+  type StudentGradeItem,
+} from '../../lib/academicActivityStore';
 
-const attendanceData = [
-  { name: 'Sen', hadir: 480, tidak: 20 },
-  { name: 'Sel', hadir: 490, tidak: 10 },
-  { name: 'Rab', hadir: 470, tidak: 30 },
-  { name: 'Kam', hadir: 485, tidak: 15 },
-  { name: 'Jum', hadir: 495, tidak: 5 },
-];
+const dayLabel = (value?: string | null) => {
+  if (!value) {
+    return '-';
+  }
 
-const gradeData = [
-  { bulan: 'Jan', rata: 82 },
-  { bulan: 'Feb', rata: 85 },
-  { bulan: 'Mar', rata: 83 },
-  { bulan: 'Apr', rata: 87 },
-  { bulan: 'Mei', rata: 89 },
-  { bulan: 'Jun', rata: 91 },
-];
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
+  return new Intl.DateTimeFormat('id-ID', { weekday: 'short' }).format(date);
+};
 
 export default function AdminDashboardCharts() {
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordItem[]>([]);
+  const [grades, setGrades] = useState<StudentGradeItem[]>([]);
+
+  useEffect(() => {
+    void getAttendanceRecords().then(setAttendanceRecords).catch(() => setAttendanceRecords([]));
+    void getGrades().then(setGrades).catch(() => setGrades([]));
+  }, []);
+
+  const attendanceData = useMemo(() => {
+    const grouped = new Map<string, { name: string; hadir: number; tidak: number }>();
+
+    attendanceRecords.forEach((record) => {
+      const key = record.tanggal ?? '-';
+      const existing = grouped.get(key) ?? {
+        name: dayLabel(record.tanggal),
+        hadir: 0,
+        tidak: 0,
+      };
+
+      if (record.statusCode === 'H') {
+        existing.hadir += 1;
+      } else {
+        existing.tidak += 1;
+      }
+
+      grouped.set(key, existing);
+    });
+
+    return Array.from(grouped.values()).slice(-7);
+  }, [attendanceRecords]);
+
+  const gradeData = useMemo(() => {
+    const grouped = new Map<string, { bulan: string; total: number; count: number }>();
+
+    grades.forEach((grade) => {
+      const bulan = monthLabelFromDate(grade.tanggal) || '-';
+      const existing = grouped.get(bulan) ?? { bulan, total: 0, count: 0 };
+      existing.total += Number(grade.nilai);
+      existing.count += 1;
+      grouped.set(bulan, existing);
+    });
+
+    return Array.from(grouped.values()).map((item) => ({
+      bulan: item.bulan,
+      rata: item.count > 0 ? Number((item.total / item.count).toFixed(2)) : 0,
+    }));
+  }, [grades]);
+
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <motion.div

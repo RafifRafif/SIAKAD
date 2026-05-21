@@ -1,23 +1,34 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Calendar, CheckCircle, XCircle } from 'lucide-react';
 import { motion } from 'motion/react';
-
-const presensiData = [
-  { tanggal: '27 Mar 2026', hari: 'Jumat', status: 'Hadir', waktu: '07:15' },
-  { tanggal: '26 Mar 2026', hari: 'Kamis', status: 'Hadir', waktu: '07:10' },
-  { tanggal: '25 Mar 2026', hari: 'Rabu', status: 'Hadir', waktu: '07:20' },
-  { tanggal: '24 Mar 2026', hari: 'Selasa', status: 'Tidak Hadir', waktu: '-', keterangan: 'Sakit' },
-  { tanggal: '23 Mar 2026', hari: 'Senin', status: 'Hadir', waktu: '07:05' },
-  { tanggal: '20 Mar 2026', hari: 'Jumat', status: 'Hadir', waktu: '07:18' },
-  { tanggal: '19 Mar 2026', hari: 'Kamis', status: 'Hadir', waktu: '07:12' },
-  { tanggal: '18 Mar 2026', hari: 'Rabu', status: 'Hadir', waktu: '07:08' },
-];
+import { getAuthSession } from '../../lib/authStore';
+import {
+  formatDisplayDate,
+  getAttendanceRecords,
+  type AttendanceRecordItem,
+} from '../../lib/academicActivityStore';
 
 export default function PresensiSiswa() {
+  const [presensiData, setPresensiData] = useState<AttendanceRecordItem[]>([]);
+
+  useEffect(() => {
+    const loadPresensi = async () => {
+      const session = await getAuthSession();
+      const items = await getAttendanceRecords(
+        session?.username ? { nis: session.username } : {}
+      );
+      setPresensiData(items);
+    };
+
+    void loadPresensi().catch(() => setPresensiData([]));
+  }, []);
+
   const totalHari = presensiData.length;
-  const totalHadir = presensiData.filter((p) => p.status === 'Hadir').length;
-  const persentaseHadir = ((totalHadir / totalHari) * 100).toFixed(1);
+  const totalHadir = presensiData.filter((p) => p.statusCode === 'H').length;
+  const persentaseHadir =
+    totalHari > 0 ? ((totalHadir / totalHari) * 100).toFixed(1) : '0.0';
 
   return (
     <div className="space-y-6">
@@ -83,7 +94,7 @@ export default function PresensiSiswa() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Riwayat Presensi</h3>
-          <p className="text-sm text-gray-600 mt-1">Maret 2026</p>
+          <p className="text-sm text-gray-600 mt-1">Data dari backend</p>
         </div>
 
         <div className="overflow-x-auto">
@@ -110,16 +121,16 @@ export default function PresensiSiswa() {
             <tbody className="divide-y divide-gray-200">
               {presensiData.map((item, index) => (
                 <motion.tr
-                  key={index}
+                  key={item.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   className="hover:bg-gray-50"
                 >
-                  <td className="px-6 py-4 text-sm text-gray-900">{item.tanggal}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{item.hari}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">{formatDisplayDate(item.tanggal)}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{item.hari ?? '-'}</td>
                   <td className="px-6 py-4">
-                    {item.status === 'Hadir' ? (
+                    {item.statusCode === 'H' ? (
                       <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium text-sm">
                         <CheckCircle size={16} />
                         Hadir
@@ -131,7 +142,7 @@ export default function PresensiSiswa() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{item.waktu}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">{item.waktu ?? '-'}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {item.keterangan || '-'}
                   </td>
@@ -150,24 +161,9 @@ export default function PresensiSiswa() {
         className="bg-blue-50 border border-blue-200 rounded-xl p-6"
       >
         <h4 className="font-semibold text-blue-900 mb-2">Informasi</h4>
-        <ul className="space-y-2 text-sm text-blue-800">
-          <li className="flex items-start gap-2">
-            <span>•</span>
-            <span>
-              Presensi dihitung berdasarkan kehadiran di kelas mulai pukul 07:30 pagi
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span>•</span>
-            <span>Jika tidak hadir, segera hubungi wali kelas dengan surat keterangan</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span>•</span>
-            <span>
-              Persentase kehadiran minimal 75% untuk mengikuti ujian akhir semester
-            </span>
-          </li>
-        </ul>
+        <p className="text-sm text-blue-800">
+          Riwayat presensi akan tampil setelah data tersimpan di backend.
+        </p>
       </motion.div>
     </div>
   );

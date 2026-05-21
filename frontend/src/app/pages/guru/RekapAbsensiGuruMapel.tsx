@@ -1,121 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ClipboardList } from 'lucide-react';
+import {
+  getAttendanceRecords,
+  monthLabelFromDate,
+  uniqueValues,
+  type AttendanceRecordItem,
+} from '../../lib/academicActivityStore';
 
 type StatusHarian = 'H' | 'A' | 'S' | 'I' | '-';
 
-const tanggalPresensi = Array.from({ length: 30 }, (_, index) =>
+const tanggalPresensi = Array.from({ length: 31 }, (_, index) =>
   String(index + 1).padStart(2, '0')
 );
-
-const bulanOptions = ['April 2026', 'Mei 2026', 'Juni 2026'];
-const mataPelajaranAktif = 'Matematika';
-
-const daftarSiswa: Array<{
-  id: number;
-  nis: string;
-  nama: string;
-  rekapPresensi: Record<string, Partial<Record<string, StatusHarian>>>;
-}> = [
-  {
-    id: 1,
-    nis: '2024001',
-    nama: 'Ahmad Fauzi',
-    rekapPresensi: {
-      'April 2026': {
-        '01': 'H',
-        '02': 'H',
-        '03': 'H',
-        '04': 'I',
-        '05': 'H',
-        '08': 'H',
-        '09': 'H',
-        '10': 'S',
-      },
-      'Mei 2026': {
-        '01': 'H',
-        '02': 'H',
-        '04': 'S',
-        '05': 'H',
-        '06': 'H',
-      },
-    },
-  },
-  {
-    id: 2,
-    nis: '2024002',
-    nama: 'Siti Nurhaliza',
-    rekapPresensi: {
-      'April 2026': {
-        '01': 'H',
-        '02': 'S',
-        '03': 'S',
-        '04': 'H',
-        '05': 'H',
-        '08': 'H',
-        '09': 'I',
-        '10': 'H',
-      },
-      'Mei 2026': {
-        '01': 'H',
-        '02': 'H',
-        '04': 'H',
-        '05': 'I',
-        '06': 'H',
-      },
-    },
-  },
-  {
-    id: 3,
-    nis: '2024003',
-    nama: 'Muhammad Rizki',
-    rekapPresensi: {
-      'April 2026': {
-        '01': 'H',
-        '02': 'H',
-        '03': 'A',
-        '04': 'H',
-        '05': 'H',
-        '08': 'H',
-        '09': 'H',
-        '10': 'H',
-      },
-      'Mei 2026': {
-        '01': 'H',
-        '02': 'A',
-        '04': 'H',
-        '05': 'H',
-        '06': 'H',
-      },
-    },
-  },
-  {
-    id: 4,
-    nis: '2024004',
-    nama: 'Fatimah Azzahra',
-    rekapPresensi: {
-      'April 2026': {
-        '01': 'H',
-        '02': 'H',
-        '03': 'H',
-        '04': 'H',
-        '05': 'I',
-        '08': 'H',
-        '09': 'H',
-        '10': 'H',
-      },
-      'Mei 2026': {
-        '01': 'H',
-        '02': 'H',
-        '04': 'H',
-        '05': 'H',
-        '06': 'S',
-      },
-    },
-  },
-];
 
 const statusStyles: Record<StatusHarian, string> = {
   H: 'bg-green-50 text-green-700 ring-green-200',
@@ -137,18 +35,75 @@ const countStatus = (
   statusToCount: Exclude<StatusHarian, '-'>
 ) => Object.values(presensi).filter((status) => status === statusToCount).length;
 
+const dayFromDate = (value?: string | null) => {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return String(date.getDate()).padStart(2, '0');
+};
+
 export default function RekapAbsensiGuruMapel() {
-  const [selectedBulan, setSelectedBulan] = useState(bulanOptions[0]);
-  const daftarPresensiSiswa = useMemo(
-    () =>
-      daftarSiswa.map((siswa) => ({
-        id: siswa.id,
-        nis: siswa.nis,
-        nama: siswa.nama,
-        presensi: siswa.rekapPresensi[selectedBulan] ?? {},
-      })),
-    [selectedBulan]
+  const [records, setRecords] = useState<AttendanceRecordItem[]>([]);
+  const [selectedBulan, setSelectedBulan] = useState('');
+
+  useEffect(() => {
+    const loadRecords = async () => {
+      const items = await getAttendanceRecords({ mine: '1' });
+
+      setRecords(items);
+      setSelectedBulan((current) => current || monthLabelFromDate(items[0]?.tanggal));
+    };
+
+    void loadRecords()
+      .catch(() => setRecords([]));
+  }, []);
+
+  const bulanOptions = useMemo(
+    () => uniqueValues(records.map((item) => monthLabelFromDate(item.tanggal))),
+    [records]
   );
+  const mataPelajaranAktif = useMemo(
+    () => uniqueValues(records.map((item) => item.mapel)).join(', ') || '-',
+    [records]
+  );
+
+  const daftarPresensiSiswa = useMemo(() => {
+    const filteredRecords = records.filter(
+      (record) => !selectedBulan || monthLabelFromDate(record.tanggal) === selectedBulan
+    );
+    const grouped = new Map<
+      string,
+      { id: string; nis: string; nama: string; presensi: Partial<Record<string, StatusHarian>> }
+    >();
+
+    filteredRecords.forEach((record) => {
+      const key = record.nis;
+      const existing =
+        grouped.get(key) ??
+        {
+          id: key,
+          nis: record.nis,
+          nama: record.nama,
+          presensi: {},
+        };
+
+      const day = dayFromDate(record.tanggal);
+      if (day) {
+        existing.presensi[day] = record.statusCode;
+      }
+
+      grouped.set(key, existing);
+    });
+
+    return Array.from(grouped.values());
+  }, [records, selectedBulan]);
+
   const statusTerisi = daftarPresensiSiswa.flatMap((item) => Object.values(item.presensi));
   const totalHadir = statusTerisi.filter((status) => status === 'H').length;
   const totalAlpha = statusTerisi.filter((status) => status === 'A').length;

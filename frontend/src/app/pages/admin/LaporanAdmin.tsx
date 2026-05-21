@@ -1,8 +1,17 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { motion } from 'motion/react';
 import { Download, FileText, Calendar } from 'lucide-react';
+import { apiDownload } from '../../lib/apiClient';
+import {
+  emptyDashboardSummary,
+  getDashboardSummaryWithFilters,
+  getReportOptions,
+  type DashboardSummary,
+  type ReportOptions,
+} from '../../lib/academicActivityStore';
 
 const LaporanAdminCharts = dynamic(() => import('./LaporanAdminCharts'), {
   ssr: false,
@@ -26,6 +35,40 @@ function ChartGridSkeleton() {
 }
 
 export default function LaporanAdmin() {
+  const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
+  const [periode, setPeriode] = useState('Bulanan');
+  const [bulan, setBulan] = useState('Data dari backend');
+  const [kelas, setKelas] = useState('all');
+  const [reportOptions, setReportOptions] = useState<ReportOptions>({
+    bulan: [],
+    kelas: [],
+  });
+
+  useEffect(() => {
+    void getReportOptions()
+      .then(setReportOptions)
+      .catch(() => setReportOptions({ bulan: [], kelas: [] }));
+  }, []);
+
+  useEffect(() => {
+    void getDashboardSummaryWithFilters({
+      bulan,
+      kelas,
+    })
+      .then(setSummary)
+      .catch(() => setSummary(emptyDashboardSummary));
+  }, [bulan, kelas]);
+
+  const handleExport = () => {
+    const params = new URLSearchParams({
+      periode,
+      bulan,
+      kelas,
+    });
+
+    void apiDownload(`/api/reports/admin/export?${params.toString()}`, 'laporan-akademik.pdf');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -33,7 +76,10 @@ export default function LaporanAdmin() {
           <h2 className="text-2xl font-bold text-gray-900">Laporan Akademik</h2>
           <p className="text-gray-600 mt-1">Rekap dan analisis data akademik</p>
         </div>
-        <button className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-all font-medium shadow-md">
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-all font-medium shadow-md"
+        >
           <Download size={20} />
           <span>Export PDF</span>
         </button>
@@ -46,7 +92,11 @@ export default function LaporanAdmin() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Periode
             </label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none">
+            <select
+              value={periode}
+              onChange={(event) => setPeriode(event.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+            >
               <option>Bulanan</option>
               <option>Semester</option>
               <option>Tahunan</option>
@@ -56,27 +106,37 @@ export default function LaporanAdmin() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Bulan
             </label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none">
-              <option>Maret 2026</option>
-              <option>Februari 2026</option>
-              <option>Januari 2026</option>
+            <select
+              value={bulan}
+              onChange={(event) => setBulan(event.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+            >
+              {['Data dari backend', ...reportOptions.bulan].map((option) => (
+                <option key={option}>{option}</option>
+              ))}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Kelas
             </label>
-            <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none">
-              <option>Semua Kelas</option>
-              <option>Kelas X</option>
-              <option>Kelas XI</option>
-              <option>Kelas XII</option>
+            <select
+              value={kelas}
+              onChange={(event) => setKelas(event.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+            >
+              <option value="all">Semua Kelas</option>
+              {reportOptions.kelas.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </div>
         </div>
       </div>
 
-      <LaporanAdminCharts />
+      <LaporanAdminCharts bulan={bulan} kelas={kelas} />
 
       {/* Summary Cards */}
       <div className="grid sm:grid-cols-3 gap-6">
@@ -92,7 +152,9 @@ export default function LaporanAdmin() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Total Hari Efektif</p>
-              <p className="text-2xl font-bold text-gray-900">248</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {summary.guru.hariEfektif ?? summary.guru.presensi}
+              </p>
             </div>
           </div>
         </motion.div>
@@ -109,7 +171,9 @@ export default function LaporanAdmin() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Rata-rata Kehadiran</p>
-              <p className="text-2xl font-bold text-gray-900">96.2%</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {summary.admin.presensiHariIni === null ? '0%' : `${summary.admin.presensiHariIni}%`}
+              </p>
             </div>
           </div>
         </motion.div>
@@ -126,7 +190,9 @@ export default function LaporanAdmin() {
             </div>
             <div>
               <p className="text-sm text-gray-600">Rata-rata Nilai Keseluruhan</p>
-              <p className="text-2xl font-bold text-gray-900">86.5</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {summary.admin.rataRataNilai === null ? '0' : summary.admin.rataRataNilai}
+              </p>
             </div>
           </div>
         </motion.div>

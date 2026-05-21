@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, Eye, EyeOff, KeyRound, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../components/dashboard/Toast';
-import { getAuthSession } from '../lib/authStore';
+import type { AppRole, GuruAccess } from '../lib/authStore';
+import { ApiError, apiGet, apiPut, apiUpload } from '../lib/apiClient';
 import {
   Dialog,
   DialogContent,
@@ -15,19 +16,35 @@ import {
 } from '../components/ui/dialog';
 import { Button } from '../components/ui/button';
 
+interface ProfileResponse {
+  username: string;
+  role: AppRole;
+  guruAccess?: GuruAccess[];
+  nama: string;
+  email?: string | null;
+  telepon?: string | null;
+  alamat?: string | null;
+  tanggalLahir?: string | null;
+  fotoProfil?: string | null;
+}
+
 export default function ProfilePage() {
   const { toasts, showToast, removeToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [profileRoleLabel, setProfileRoleLabel] = useState('Siswa - Kelas XI-B');
-  const [identifierLabel, setIdentifierLabel] = useState('NIS');
-  const [identifierValue, setIdentifierValue] = useState('2024003');
+  const [profileRoleLabel, setProfileRoleLabel] = useState('');
+  const [identifierLabel, setIdentifierLabel] = useState('Akun');
+  const [identifierValue, setIdentifierValue] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewPhotoUrlRef = useRef<string | null>(null);
   const [formData, setFormData] = useState({
-    nama: 'Muhammad Rizki',
-    email: 'rizki@example.com',
-    telepon: '08123456789',
-    alamat: 'Jl. Pendidikan No. 123, Batam',
-    tanggalLahir: '2008-05-15',
+    nama: '',
+    email: '',
+    telepon: '',
+    alamat: '',
+    tanggalLahir: '',
   });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -41,37 +58,57 @@ export default function ProfilePage() {
   });
 
   useEffect(() => {
-    const session = getAuthSession();
-    if (!session) {
-      return;
-    }
+    void apiGet<ProfileResponse>('/api/profile')
+      .then(applyProfile)
+      .catch((error) => showToast(getApiErrorMessage(error, 'Gagal memuat profile.'), 'error'));
 
-    if (session.role === 'guru') {
-      setProfileRoleLabel(`Guru - ${session.guruAccess?.join(' & ') ?? 'Aktif'}`);
-      setIdentifierLabel('Akun');
-      setIdentifierValue(session.username);
-      setFormData((current) => ({
-        ...current,
-        nama: session.displayName,
-      }));
-      return;
-    }
-
-    if (session.role === 'admin') {
-      setProfileRoleLabel('Administrator');
-      setIdentifierLabel('Akun');
-      setIdentifierValue(session.username);
-      setFormData((current) => ({
-        ...current,
-        nama: session.displayName,
-      }));
-    }
+    return () => {
+      revokePreviewPhoto();
+    };
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    showToast('Profile berhasil diupdate!', 'success');
-    setIsEditing(false);
+
+    try {
+      const profile = await apiPut<ProfileResponse>('/api/profile', formData);
+      applyProfile(profile);
+      showToast('Profile berhasil diupdate!', 'success');
+      setIsEditing(false);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal mengupdate profile.'), 'error');
+    }
+  };
+
+  const handlePhotoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (isUploadingPhoto) {
+      return;
+    }
+
+    const previousPhoto = profilePhoto;
+    const previewUrl = URL.createObjectURL(file);
+    const payload = new FormData();
+    payload.append('fotoProfil', file);
+    showPreviewPhoto(previewUrl);
+    setIsUploadingPhoto(true);
+
+    try {
+      const profile = await apiUpload<ProfileResponse>('/api/profile/photo', payload);
+      applyProfile(profile);
+      showToast('Foto profile berhasil diupdate!', 'success');
+    } catch (error) {
+      replaceProfilePhoto(previousPhoto);
+      showToast(getApiErrorMessage(error, 'Gagal mengupdate foto profile.'), 'error');
+    } finally {
+      setIsUploadingPhoto(false);
+      event.target.value = '';
+    }
   };
 
   const resetPasswordForm = () => {
@@ -96,7 +133,7 @@ export default function ProfilePage() {
     }));
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (
@@ -118,9 +155,14 @@ export default function ProfilePage() {
       return;
     }
 
-    showToast('Password berhasil diperbarui!', 'success');
-    resetPasswordForm();
-    setIsPasswordModalOpen(false);
+    try {
+      await apiPut('/api/profile/password', passwordData);
+      showToast('Password berhasil diperbarui!', 'success');
+      resetPasswordForm();
+      setIsPasswordModalOpen(false);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal memperbarui password.'), 'error');
+    }
   };
 
   const profileInitials = formData.nama
@@ -129,6 +171,42 @@ export default function ProfilePage() {
     .slice(0, 2)
     .map((item) => item[0]?.toUpperCase())
     .join('');
+
+  const applyProfile = (profile: ProfileResponse) => {
+    setProfileRoleLabel(profileRoleLabelFromProfile(profile));
+    setIdentifierLabel('Akun');
+    setIdentifierValue(profile.username);
+    replaceProfilePhoto(profile.fotoProfil ?? null);
+    setFormData({
+      nama: profile.nama ?? '',
+      email: profile.email ?? '',
+      telepon: profile.telepon ?? '',
+      alamat: profile.alamat ?? '',
+      tanggalLahir: profile.tanggalLahir ?? '',
+    });
+  };
+
+  const revokePreviewPhoto = () => {
+    if (previewPhotoUrlRef.current) {
+      URL.revokeObjectURL(previewPhotoUrlRef.current);
+      previewPhotoUrlRef.current = null;
+    }
+  };
+
+  const replaceProfilePhoto = (nextPhoto: string | null) => {
+    if (previewPhotoUrlRef.current && previewPhotoUrlRef.current !== nextPhoto) {
+      URL.revokeObjectURL(previewPhotoUrlRef.current);
+      previewPhotoUrlRef.current = null;
+    }
+
+    setProfilePhoto(nextPhoto);
+  };
+
+  const showPreviewPhoto = (previewUrl: string) => {
+    revokePreviewPhoto();
+    previewPhotoUrlRef.current = previewUrl;
+    setProfilePhoto(previewUrl);
+  };
 
   return (
     <div className="space-y-6">
@@ -156,9 +234,28 @@ export default function ProfilePage() {
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 text-center">
             <div className="relative inline-block mb-4">
               <div className="w-32 h-32 bg-gradient-to-br from-[#2563EB] to-blue-400 rounded-full flex items-center justify-center text-white text-4xl font-bold">
-                {profileInitials || 'U'}
+                {profilePhoto ? (
+                  <img
+                    src={profilePhoto}
+                    alt="Foto profile"
+                    className="h-full w-full rounded-full object-cover"
+                  />
+                ) : (
+                  profileInitials || 'U'
+                )}
               </div>
-              <button className="absolute bottom-0 right-0 w-10 h-10 bg-[#2563EB] rounded-full flex items-center justify-center text-white shadow-lg hover:bg-blue-700 transition-colors">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute bottom-0 right-0 w-10 h-10 bg-[#2563EB] rounded-full flex items-center justify-center text-white shadow-lg hover:bg-blue-700 transition-colors"
+              >
                 <Camera size={20} />
               </button>
             </div>
@@ -449,3 +546,36 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (! (error instanceof ApiError)) {
+    return fallback;
+  }
+
+  if (
+    typeof error.payload === 'object' &&
+    error.payload !== null &&
+    'errors' in error.payload
+  ) {
+    const errors = (error.payload as { errors?: Record<string, string[]> }).errors;
+    const firstError = errors ? Object.values(errors)[0]?.[0] : null;
+
+    if (firstError) {
+      return firstError;
+    }
+  }
+
+  return error.message || fallback;
+};
+
+const profileRoleLabelFromProfile = (profile: ProfileResponse) => {
+  if (profile.role === 'guru') {
+    return `Guru - ${profile.guruAccess?.join(' & ') || 'Aktif'}`;
+  }
+
+  if (profile.role === 'admin') {
+    return 'Administrator';
+  }
+
+  return 'Siswa';
+};

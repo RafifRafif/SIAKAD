@@ -1,22 +1,50 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { CalendarDays, ClipboardList, Users, BellRing } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { StatCard } from '../../components/dashboard/StatCard';
-
-const agendaKelas = [
-  { waktu: '07:00', agenda: 'Pengecekan kehadiran kelas X-A', lokasi: 'Ruang X-A' },
-  { waktu: '09:30', agenda: 'Koordinasi wali murid', lokasi: 'Ruang Guru' },
-  { waktu: '12:30', agenda: 'Rekap presensi harian', lokasi: 'Dashboard Presensi' },
-];
-
-const pengumumanKelas = [
-  { title: '2 siswa izin hari ini', detail: 'Perlu tindak lanjut wali kelas', tone: 'bg-amber-50 border-amber-200 text-amber-800' },
-  { title: 'Absensi mingguan belum lengkap', detail: 'Lengkapi sebelum Jumat sore', tone: 'bg-blue-50 border-blue-200 text-blue-800' },
-];
+import {
+  getClassDashboard,
+  emptyDashboardSummary,
+  getDashboardSummary,
+  type ClassDashboardData,
+  type DashboardSummary,
+} from '../../lib/academicActivityStore';
 
 export default function GuruKelasDashboard() {
+  const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
+  const [classDashboard, setClassDashboard] = useState<ClassDashboardData>({
+    kelas: null,
+    totalStudents: 0,
+    attendanceToday: 0,
+    agendaToday: [],
+    reminders: [],
+    weeklyActivities: 0,
+    followUps: 0,
+  });
+
+  useEffect(() => {
+    void Promise.all([getDashboardSummary(), getClassDashboard()])
+      .then(([dashboardSummary, classData]) => {
+        setSummary(dashboardSummary);
+        setClassDashboard(classData);
+      })
+      .catch(() => {
+        setSummary(emptyDashboardSummary);
+        setClassDashboard({
+          kelas: null,
+          totalStudents: 0,
+          attendanceToday: 0,
+          agendaToday: [],
+          reminders: [],
+          weeklyActivities: 0,
+          followUps: 0,
+        });
+      });
+  }, []);
+
   return (
     <div className="space-y-8">
       <div>
@@ -27,10 +55,10 @@ export default function GuruKelasDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Users} label="Total Siswa Kelas" value="32" color="bg-blue-100 text-blue-600" />
-        <StatCard icon={ClipboardList} label="Presensi Hari Ini" value="30/32" color="bg-green-100 text-green-600" />
-        <StatCard icon={CalendarDays} label="Kegiatan Minggu Ini" value="5" color="bg-purple-100 text-purple-600" />
-        <StatCard icon={BellRing} label="Perlu Tindak Lanjut" value="2" color="bg-orange-100 text-orange-600" />
+        <StatCard icon={Users} label="Total Siswa Kelas" value={String(classDashboard.totalStudents ?? summary.admin.totalSiswa)} color="bg-blue-100 text-blue-600" />
+        <StatCard icon={ClipboardList} label="Presensi Hari Ini" value={String(classDashboard.attendanceToday ?? summary.guru.presensi)} color="bg-green-100 text-green-600" />
+        <StatCard icon={CalendarDays} label="Kegiatan Minggu Ini" value={String(classDashboard.weeklyActivities)} color="bg-purple-100 text-purple-600" />
+        <StatCard icon={BellRing} label="Perlu Tindak Lanjut" value={String(classDashboard.followUps)} color="bg-orange-100 text-orange-600" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -40,19 +68,9 @@ export default function GuruKelasDashboard() {
           className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
         >
           <h3 className="mb-6 text-lg font-semibold text-gray-900">Agenda Hari Ini</h3>
-          <div className="space-y-4">
-            {agendaKelas.map((item) => (
-              <div key={item.agenda} className="rounded-lg border border-gray-200 p-4">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="font-semibold text-gray-900">{item.agenda}</span>
-                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-[#2563EB]">
-                    {item.waktu}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600">{item.lokasi}</p>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-gray-600">
+            {classDashboard.agendaToday[0]?.judul ?? 'Data agenda kelas akan tampil setelah tersedia di backend.'}
+          </p>
         </motion.div>
 
         <motion.div
@@ -62,14 +80,9 @@ export default function GuruKelasDashboard() {
           className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
         >
           <h3 className="mb-6 text-lg font-semibold text-gray-900">Pengingat Kelas</h3>
-          <div className="space-y-4">
-            {pengumumanKelas.map((item) => (
-              <div key={item.title} className={`rounded-lg border p-4 ${item.tone}`}>
-                <div className="mb-1 font-semibold">{item.title}</div>
-                <p className="text-sm">{item.detail}</p>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-gray-600">
+            {classDashboard.reminders[0]?.judul ?? 'Data pengingat kelas akan tampil setelah tersedia di backend.'}
+          </p>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <Link

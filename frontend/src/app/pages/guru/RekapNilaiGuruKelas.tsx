@@ -1,36 +1,48 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { FileText } from 'lucide-react';
-
-const rekapNilaiData = [
-  { id: 1, nis: '2024001', nama: 'Ahmad Fauzi', mapel: 'Matematika', jenis: 'UTS', nilai: 88, guru: 'Ustadz Ahmad Fauzi' },
-  { id: 2, nis: '2024002', nama: 'Siti Nurhaliza', mapel: 'Matematika', jenis: 'UTS', nilai: 92, guru: 'Ustadz Ahmad Fauzi' },
-  { id: 3, nis: '2024001', nama: 'Ahmad Fauzi', mapel: 'Bahasa Inggris', jenis: 'Quiz', nilai: 84, guru: 'Ustadz Rizal' },
-  { id: 4, nis: '2024002', nama: 'Siti Nurhaliza', mapel: 'Bahasa Inggris', jenis: 'Quiz', nilai: 89, guru: 'Ustadz Rizal' },
-  { id: 5, nis: '2024003', nama: 'Muhammad Rizki', mapel: 'Fisika', jenis: 'Tugas', nilai: 78, guru: 'Ustadz Muhammad Rizki' },
-  { id: 6, nis: '2024004', nama: 'Fatimah Azzahra', mapel: 'Fisika', jenis: 'Tugas', nilai: 85, guru: 'Ustadz Muhammad Rizki' },
-  { id: 7, nis: '2024005', nama: 'Abdullah Rahman', mapel: 'Kimia', jenis: 'UAS', nilai: 81, guru: 'Ustadzah Nabila' },
-  { id: 8, nis: '2024003', nama: 'Muhammad Rizki', mapel: 'Kimia', jenis: 'UAS', nilai: 76, guru: 'Ustadzah Nabila' },
-];
-
-const mapelOptions = ['Semua Mata Pelajaran', 'Matematika', 'Bahasa Inggris', 'Fisika', 'Kimia'];
-const jenisOptions = ['Semua Jenis', 'UTS', 'UAS', 'Tugas', 'Quiz'];
+import {
+  getGrades,
+  uniqueValues,
+  type StudentGradeItem,
+} from '../../lib/academicActivityStore';
 
 export default function RekapNilaiGuruKelas() {
+  const [rekapNilaiData, setRekapNilaiData] = useState<StudentGradeItem[]>([]);
   const [selectedMapel, setSelectedMapel] = useState('Semua Mata Pelajaran');
   const [selectedJenis, setSelectedJenis] = useState('Semua Jenis');
 
+  useEffect(() => {
+    void getGrades()
+      .then((items) => setRekapNilaiData(dedupeGrades(items)))
+      .catch(() => setRekapNilaiData([]));
+  }, []);
+
+  const uniqueRekapNilaiData = useMemo(
+    () => dedupeGrades(rekapNilaiData),
+    [rekapNilaiData]
+  );
+
+  const mapelOptions = useMemo(
+    () => ['Semua Mata Pelajaran', ...uniqueValues(uniqueRekapNilaiData.map((item) => item.mapel))],
+    [uniqueRekapNilaiData]
+  );
+  const jenisOptions = useMemo(
+    () => ['Semua Jenis', ...uniqueValues(uniqueRekapNilaiData.map((item) => item.jenis))],
+    [uniqueRekapNilaiData]
+  );
+
   const filteredNilai = useMemo(
     () =>
-      rekapNilaiData.filter((item) => {
+      uniqueRekapNilaiData.filter((item) => {
         const matchMapel =
           selectedMapel === 'Semua Mata Pelajaran' || item.mapel === selectedMapel;
         const matchJenis = selectedJenis === 'Semua Jenis' || item.jenis === selectedJenis;
         return matchMapel && matchJenis;
       }),
-    [selectedMapel, selectedJenis]
+    [uniqueRekapNilaiData, selectedMapel, selectedJenis]
   );
 
   return (
@@ -107,36 +119,31 @@ export default function RekapNilaiGuruKelas() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredNilai.map((item) => {
-                const grade =
-                  item.nilai >= 90 ? 'A' : item.nilai >= 80 ? 'B' : item.nilai >= 70 ? 'C' : item.nilai >= 60 ? 'D' : 'E';
-
-                return (
-                  <tr key={item.id} className="transition-colors hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.nis}</td>
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.nama}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.jenis}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.guru}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-gray-900">{item.nilai}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`rounded-full px-3 py-1 font-medium ${
-                          grade === 'A'
-                            ? 'bg-green-100 text-green-700'
-                            : grade === 'B'
-                            ? 'bg-blue-100 text-blue-700'
-                            : grade === 'C'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-red-100 text-red-700'
-                        }`}
-                      >
-                        {grade}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {filteredNilai.map((item) => (
+                <tr key={item.id} className="transition-colors hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.nis}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{item.nama}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.mapel}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.jenis}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{item.guru ?? '-'}</td>
+                  <td className="px-6 py-4 text-sm font-semibold text-gray-900">{item.nilai}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <span
+                      className={`rounded-full px-3 py-1 font-medium ${
+                        item.grade === 'A'
+                          ? 'bg-green-100 text-green-700'
+                          : item.grade === 'B'
+                          ? 'bg-blue-100 text-blue-700'
+                          : item.grade === 'C'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {item.grade}
+                    </span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -144,3 +151,20 @@ export default function RekapNilaiGuruKelas() {
     </div>
   );
 }
+
+const gradeKey = (item: StudentGradeItem) =>
+  `${item.nis}|${item.mapel}|${item.jenis}|${item.tanggal ?? ''}`;
+
+const dedupeGrades = (items: StudentGradeItem[]) => {
+  const uniqueItems = new Map<string, StudentGradeItem>();
+
+  items.forEach((item) => {
+    const key = gradeKey(item);
+
+    if (!uniqueItems.has(key)) {
+      uniqueItems.set(key, item);
+    }
+  });
+
+  return Array.from(uniqueItems.values());
+};

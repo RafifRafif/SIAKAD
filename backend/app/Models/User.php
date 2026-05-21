@@ -13,6 +13,14 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
+    public const ROLE_ADMIN = 'admin';
+
+    public const ROLE_GURU_MAPEL = 'guru_mapel';
+
+    public const ROLE_WALI_KELAS = 'wali_kelas';
+
+    public const ROLE_SISWA = 'siswa';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -20,8 +28,10 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
+        'roles',
     ];
 
     /**
@@ -44,6 +54,109 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'roles' => 'array',
         ];
+    }
+
+    public function hasRole(string $role): bool
+    {
+        return in_array($role, $this->roles ?? [], true);
+    }
+
+    /**
+     * @param  list<string>  $roles
+     */
+    public function hasAnyRole(array $roles): bool
+    {
+        return count(array_intersect($this->roles ?? [], $roles)) > 0;
+    }
+
+    public function dashboardPath(): string
+    {
+        if ($this->isLinkedStudentAccount()) {
+            return '/siswa';
+        }
+
+        if ($this->isLinkedTeacherAccount()) {
+            return '/guru';
+        }
+
+        if ($this->hasRole(self::ROLE_SISWA)) {
+            return '/siswa';
+        }
+
+        if ($this->hasAnyRole([self::ROLE_GURU_MAPEL, self::ROLE_WALI_KELAS])) {
+            return '/guru';
+        }
+
+        if ($this->hasRole(self::ROLE_ADMIN)) {
+            return '/admin';
+        }
+
+        return '/login';
+    }
+
+    public function frontendRole(): string
+    {
+        if ($this->isLinkedStudentAccount()) {
+            return 'siswa';
+        }
+
+        if ($this->isLinkedTeacherAccount()) {
+            return 'guru';
+        }
+
+        if ($this->hasRole(self::ROLE_SISWA)) {
+            return 'siswa';
+        }
+
+        if ($this->hasAnyRole([self::ROLE_GURU_MAPEL, self::ROLE_WALI_KELAS])) {
+            return 'guru';
+        }
+
+        if ($this->hasRole(self::ROLE_ADMIN)) {
+            return 'admin';
+        }
+
+        return 'siswa';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function guruAccess(): array
+    {
+        $teacher = Teacher::query()->where('nip', $this->username)->first();
+
+        if ($teacher !== null) {
+            $teacherRoles = $teacher->roles ?? [];
+
+            return array_values(array_filter(
+                ['Guru Mapel', 'Wali Kelas'],
+                fn (string $role): bool => in_array($role, $teacherRoles, true)
+            ));
+        }
+
+        $access = [];
+
+        if ($this->hasRole(self::ROLE_GURU_MAPEL)) {
+            $access[] = 'Guru Mapel';
+        }
+
+        if ($this->hasRole(self::ROLE_WALI_KELAS)) {
+            $access[] = 'Wali Kelas';
+        }
+
+        return $access;
+    }
+
+    private function isLinkedStudentAccount(): bool
+    {
+        return Student::query()->where('nis', $this->username)->exists();
+    }
+
+    private function isLinkedTeacherAccount(): bool
+    {
+        return Teacher::query()->where('nip', $this->username)->exists();
     }
 }

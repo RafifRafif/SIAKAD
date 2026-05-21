@@ -1,20 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, BookOpen } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
+import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
 import {
   defaultMasterPelajaran,
-  MASTER_PELAJARAN_STORAGE_KEY,
   type MasterPelajaran,
 } from '../../lib/pelajaranStore';
-import { defaultGuruData, GURU_STORAGE_KEY, type GuruItem } from '../../lib/guruStore';
-import { defaultKelasData, KELAS_STORAGE_KEY, type KelasItem } from '../../lib/kelasStore';
+import { defaultGuruData, type GuruItem } from '../../lib/guruStore';
+import { defaultKelasData, type KelasItem } from '../../lib/kelasStore';
 import {
   defaultTahunAjaranData,
-  TAHUN_AJARAN_STORAGE_KEY,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
@@ -27,14 +26,8 @@ interface Pelajaran {
   kelompok: 'Ikhwan' | 'Akhwat';
 }
 
-const initialPelajaran: Pelajaran[] = [
-  { id: 1, nama: 'Matematika', tahunAjaran: '2025/2026 Genap', guruPengampu: 'Ustadz Ahmad Fauzi', kelas: 'X-A', kelompok: 'Ikhwan' },
-  { id: 2, nama: 'Bahasa Arab', tahunAjaran: '2025/2026 Genap', guruPengampu: 'Ustadzah Siti Nurhaliza', kelas: 'XI-B', kelompok: 'Akhwat' },
-  { id: 3, nama: 'Tahsin & Tahfidz', tahunAjaran: '2026/2027 Ganjil', guruPengampu: 'Ustadz Rahman', kelas: 'XII-A', kelompok: 'Ikhwan' },
-];
-
 export default function DataPelajaranPage() {
-  const [pelajaran, setPelajaran] = useState<Pelajaran[]>(initialPelajaran);
+  const [pelajaran, setPelajaran] = useState<Pelajaran[]>([]);
   const [masterPelajaran, setMasterPelajaran] = useState<MasterPelajaran[]>(
     defaultMasterPelajaran
   );
@@ -49,100 +42,50 @@ export default function DataPelajaranPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingPelajaran, setEditingPelajaran] = useState<Pelajaran | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
-    nama: defaultMasterPelajaran[0]?.nama ?? '',
-    tahunAjaran: '2025/2026 Genap',
-    guruPengampu: defaultGuruData.find((item) => item.role.includes('Guru Mapel'))?.nama ?? '',
-    kelas: defaultKelasData[0]?.nama ?? '',
-    kelompok: 'Ikhwan' as 'Ikhwan' | 'Akhwat',
+    nama: '',
+    tahunAjaran: '',
+    guruPengampu: '',
+    kelas: '',
+    kelompok: '' as '' | 'Ikhwan' | 'Akhwat',
   });
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(MASTER_PELAJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        MASTER_PELAJARAN_STORAGE_KEY,
-        JSON.stringify(defaultMasterPelajaran)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as MasterPelajaran[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setMasterPelajaran(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        MASTER_PELAJARAN_STORAGE_KEY,
-        JSON.stringify(defaultMasterPelajaran)
-      );
-    }
+    void apiGet<MasterPelajaran[]>('/api/subjects')
+      .then(setMasterPelajaran)
+      .catch(() => showToast('Gagal memuat master pelajaran dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
-    const storedData = window.localStorage.getItem(TAHUN_AJARAN_STORAGE_KEY);
-    if (!storedData) {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-      return;
-    }
-
-    try {
-      const parsedData = JSON.parse(storedData) as TahunAjaranItem[];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        setTahunAjaranOptions(parsedData);
-      }
-    } catch {
-      window.localStorage.setItem(
-        TAHUN_AJARAN_STORAGE_KEY,
-        JSON.stringify(defaultTahunAjaranData)
-      );
-    }
+    void apiGet<TahunAjaranItem[]>('/api/academic-years')
+      .then(setTahunAjaranOptions)
+      .catch(() => showToast('Gagal memuat tahun ajaran dari backend.', 'error'));
   }, []);
 
-  const tahunAjaranList = ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)];
+  const tahunAjaranList = useMemo(
+    () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
+    [tahunAjaranOptions]
+  );
 
   useEffect(() => {
-    const storedGuru = window.localStorage.getItem(GURU_STORAGE_KEY);
-    if (!storedGuru) {
-      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
-      setGuruMapelOptions(defaultGuruData.filter((item) => item.role.includes('Guru Mapel')));
-      return;
-    }
-
-    try {
-      const parsedGuru = JSON.parse(storedGuru) as GuruItem[];
-      if (Array.isArray(parsedGuru) && parsedGuru.length > 0) {
-        setGuruMapelOptions(parsedGuru.filter((item) => item.role.includes('Guru Mapel')));
-      }
-    } catch {
-      window.localStorage.setItem(GURU_STORAGE_KEY, JSON.stringify(defaultGuruData));
-      setGuruMapelOptions(defaultGuruData.filter((item) => item.role.includes('Guru Mapel')));
-    }
+    void apiGet<GuruItem[]>('/api/teachers')
+      .then((items) => setGuruMapelOptions(items.filter((item) => item.role.includes('Guru Mapel'))))
+      .catch(() => showToast('Gagal memuat guru mapel dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
-    const storedKelas = window.localStorage.getItem(KELAS_STORAGE_KEY);
-    if (!storedKelas) {
-      window.localStorage.setItem(KELAS_STORAGE_KEY, JSON.stringify(defaultKelasData));
-      setKelasOptions(defaultKelasData);
-      return;
-    }
+    void apiGet<KelasItem[]>('/api/school-classes')
+      .then(setKelasOptions)
+      .catch(() => showToast('Gagal memuat data kelas dari backend.', 'error'));
+  }, []);
 
-    try {
-      const parsedKelas = JSON.parse(storedKelas) as KelasItem[];
-      if (Array.isArray(parsedKelas) && parsedKelas.length > 0) {
-        setKelasOptions(parsedKelas);
-      }
-    } catch {
-      window.localStorage.setItem(KELAS_STORAGE_KEY, JSON.stringify(defaultKelasData));
-      setKelasOptions(defaultKelasData);
-    }
+  useEffect(() => {
+    void apiGet<Pelajaran[]>('/api/learning-assignments')
+      .then((items) => setPelajaran(dedupePembelajaran(items)))
+      .catch(() => showToast('Gagal memuat data pembelajaran dari backend.', 'error'));
   }, []);
 
   const filteredPelajaran = pelajaran.filter(
@@ -158,14 +101,11 @@ export default function DataPelajaranPage() {
   const handleAdd = () => {
     setEditingPelajaran(null);
     setFormData({
-      nama: masterPelajaran[0]?.nama ?? '',
-      tahunAjaran: tahunAjaranList[1] ?? '2025/2026 Genap',
-      guruPengampu:
-        guruMapelOptions[0]?.nama ??
-        defaultGuruData.find((item) => item.role.includes('Guru Mapel'))?.nama ??
-        '',
-      kelas: kelasOptions[0]?.nama ?? defaultKelasData[0]?.nama ?? '',
-      kelompok: 'Ikhwan',
+      nama: '',
+      tahunAjaran: '',
+      guruPengampu: '',
+      kelas: '',
+      kelompok: '',
     });
     setShowModal(true);
   };
@@ -182,27 +122,57 @@ export default function DataPelajaranPage() {
     setShowModal(true);
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Apakah Anda yakin ingin menghapus data pembelajaran ini?')) {
-      setPelajaran(pelajaran.filter((item) => item.id !== id));
-      showToast('Data pembelajaran berhasil dihapus!', 'success');
+      try {
+        await apiDelete(`/api/learning-assignments/${id}`);
+        setPelajaran((current) => current.filter((item) => item.id !== id));
+        showToast('Data pembelajaran berhasil dihapus!', 'success');
+      } catch {
+        showToast('Gagal menghapus data pembelajaran.', 'error');
+      }
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingPelajaran) {
-      setPelajaran(
-        pelajaran.map((item) =>
-          item.id === editingPelajaran.id ? { ...formData, id: item.id } : item
-        )
-      );
-      showToast('Data pembelajaran berhasil diperbarui!', 'success');
-    } else {
-      setPelajaran([...pelajaran, { ...formData, id: Date.now() }]);
-      showToast('Data pembelajaran berhasil ditambahkan!', 'success');
+
+    if (isSaving) {
+      return;
     }
-    setShowModal(false);
+
+    if (
+      !formData.nama ||
+      !formData.tahunAjaran ||
+      !formData.guruPengampu ||
+      !formData.kelas ||
+      !formData.kelompok
+    ) {
+      showToast('Lengkapi tahun ajaran, pelajaran, guru, kelas, dan kelompok terlebih dahulu.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      if (editingPelajaran) {
+        const updatedPelajaran = await apiPut<Pelajaran>(
+          `/api/learning-assignments/${editingPelajaran.id}`,
+          formData
+        );
+        setPelajaran((current) => upsertPembelajaran(current, updatedPelajaran));
+        showToast('Data pembelajaran berhasil diperbarui!', 'success');
+      } else {
+        const newPelajaran = await apiPost<Pelajaran>('/api/learning-assignments', formData);
+        setPelajaran((current) => upsertPembelajaran(current, newPelajaran));
+        showToast('Data pembelajaran berhasil ditambahkan!', 'success');
+      }
+      setShowModal(false);
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal menyimpan data pembelajaran.'), 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -349,6 +319,9 @@ export default function DataPelajaranPage() {
                       onChange={(e) => setFormData({ ...formData, tahunAjaran: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     >
+                      <option value="" disabled>
+                        Pilih tahun ajaran
+                      </option>
                       {tahunAjaranList.filter((item) => item !== 'all').map((tahunAjaran) => (
                         <option key={tahunAjaran} value={tahunAjaran}>
                           {tahunAjaran}
@@ -365,6 +338,9 @@ export default function DataPelajaranPage() {
                         onChange={(e) => setFormData({ ...formData, nama: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 py-2 pr-4 pl-10 outline-none focus:ring-2 focus:ring-[#2563EB]"
                       >
+                        <option value="" disabled>
+                          Pilih pelajaran
+                        </option>
                         {masterPelajaran.map((item) => (
                           <option key={item.id} value={item.nama}>
                             {item.nama}
@@ -385,6 +361,9 @@ export default function DataPelajaranPage() {
                       onChange={(e) => setFormData({ ...formData, guruPengampu: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     >
+                      <option value="" disabled>
+                        Pilih guru pengampu
+                      </option>
                       {guruMapelOptions.map((item) => (
                         <option key={item.id} value={item.nama}>
                           {item.nama}
@@ -404,6 +383,9 @@ export default function DataPelajaranPage() {
                       onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     >
+                      <option value="" disabled>
+                        Pilih kelas
+                      </option>
                       {kelasOptions.map((item) => (
                         <option key={item.id} value={item.nama}>
                           {item.nama}
@@ -425,6 +407,9 @@ export default function DataPelajaranPage() {
                       }
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     >
+                      <option value="" disabled>
+                        Pilih kelompok
+                      </option>
                       <option value="Ikhwan">Ikhwan</option>
                       <option value="Akhwat">Akhwat</option>
                     </select>
@@ -454,3 +439,43 @@ export default function DataPelajaranPage() {
     </div>
   );
 }
+
+const pembelajaranKey = (
+  item: Pick<Pelajaran, 'nama' | 'tahunAjaran' | 'kelas' | 'kelompok'>
+) => `${item.nama.trim().toLowerCase()}|${item.tahunAjaran}|${item.kelas}|${item.kelompok}`;
+
+const dedupePembelajaran = (items: Pelajaran[]) =>
+  Array.from(new Map(items.map((item) => [pembelajaranKey(item), item])).values());
+
+const upsertPembelajaran = (items: Pelajaran[], nextItem: Pelajaran) => {
+  const key = pembelajaranKey(nextItem);
+
+  if (items.some((item) => item.id === nextItem.id || pembelajaranKey(item) === key)) {
+    return items.map((item) =>
+      item.id === nextItem.id || pembelajaranKey(item) === key ? nextItem : item
+    );
+  }
+
+  return [...items, nextItem];
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (! (error instanceof ApiError)) {
+    return fallback;
+  }
+
+  if (
+    typeof error.payload === 'object' &&
+    error.payload !== null &&
+    'errors' in error.payload
+  ) {
+    const errors = (error.payload as { errors?: Record<string, string[]> }).errors;
+    const firstError = errors ? Object.values(errors)[0]?.[0] : null;
+
+    if (firstError) {
+      return firstError;
+    }
+  }
+
+  return error.message || fallback;
+};

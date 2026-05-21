@@ -8,39 +8,53 @@ import {
   CalendarDays,
   ClipboardList,
   Clock3,
-  FileText,
   GraduationCap,
   Users,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { getAuthSession, getCurrentGuruAccess, type GuruAccess } from '../../lib/authStore';
-
-const jadwalMapel = [
-  { waktu: '07:30 - 09:00', kelas: 'X-A', mapel: 'Matematika' },
-  { waktu: '09:15 - 10:45', kelas: 'XI-B', mapel: 'Matematika' },
-  { waktu: '13:00 - 14:30', kelas: 'XII-A', mapel: 'Matematika' },
-];
-
-const tugasMapel = [
-  { title: 'Input nilai formatif kelas X-A', deadline: 'Hari ini', tone: 'bg-red-50 border-red-200 text-red-700' },
-  { title: 'Review hasil ulangan XI-B', deadline: 'Besok', tone: 'bg-blue-50 border-blue-200 text-blue-700' },
-];
+import {
+  emptyDashboardSummary,
+  getDashboardSummary,
+  getLearningTasks,
+  getTodaySchedule,
+  type DashboardSummary,
+  type LearningAssignmentItem,
+  type LearningTaskItem,
+} from '../../lib/academicActivityStore';
 
 export default function GuruDashboard() {
   const [guruAccess, setGuruAccess] = useState<GuruAccess[]>([]);
   const [displayName, setDisplayName] = useState('Ustadz/Ustadzah');
   const [isReady, setIsReady] = useState(false);
+  const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
+  const [assignments, setAssignments] = useState<LearningAssignmentItem[]>([]);
+  const [tasks, setTasks] = useState<LearningTaskItem[]>([]);
 
   useEffect(() => {
-    setGuruAccess(getCurrentGuruAccess());
-    const session = getAuthSession();
+    const loadSession = async () => {
+      const [access, session, dashboardSummary, assignmentItems, taskItems] = await Promise.all([
+        getCurrentGuruAccess(),
+        getAuthSession(),
+        getDashboardSummary(),
+        getTodaySchedule(),
+        getLearningTasks(),
+      ]);
 
-    if (session?.role === 'guru') {
-      setDisplayName(session.displayName);
-    }
+      setGuruAccess(access);
+      setSummary(dashboardSummary);
+      setAssignments(assignmentItems);
+      setTasks(taskItems);
 
-    setIsReady(true);
+      if (session?.role === 'guru') {
+        setDisplayName(session.displayName);
+      }
+
+      setIsReady(true);
+    };
+
+    void loadSession().catch(() => setIsReady(true));
   }, []);
 
   const hasWaliKelas = guruAccess.includes('Wali Kelas');
@@ -76,14 +90,14 @@ export default function GuruDashboard() {
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {hasWaliKelas && (
           <>
-            <StatCard icon={Users} label="Siswa Wali Kelas" value="32" color="bg-blue-100 text-blue-600" />
-            <StatCard icon={ClipboardList} label="Presensi Hari Ini" value="30/32" color="bg-green-100 text-green-600" />
+            <StatCard icon={Users} label="Siswa Wali Kelas" value={String(summary.admin.totalSiswa)} color="bg-blue-100 text-blue-600" />
+            <StatCard icon={ClipboardList} label="Presensi Hari Ini" value={String(summary.guru.presensi)} color="bg-green-100 text-green-600" />
           </>
         )}
         {hasGuruMapel && (
           <>
-            <StatCard icon={BookOpen} label="Mapel Diampu" value="2" color="bg-indigo-100 text-indigo-600" />
-            <StatCard icon={Clock3} label="Jam Mengajar" value="24" color="bg-orange-100 text-orange-600" />
+            <StatCard icon={BookOpen} label="Mapel Diampu" value={String(assignments.length)} color="bg-indigo-100 text-indigo-600" />
+            <StatCard icon={Clock3} label="Input Nilai" value={String(summary.guru.inputNilai)} color="bg-orange-100 text-orange-600" />
           </>
         )}
       </div>
@@ -107,15 +121,15 @@ export default function GuruDashboard() {
             </div>
 
             <div className="space-y-4">
-              {jadwalMapel.map((item) => (
-                <div key={`${item.kelas}-${item.waktu}`} className="rounded-lg border border-gray-200 p-4">
+              {assignments.slice(0, 3).map((item) => (
+                <div key={item.id} className="rounded-lg border border-gray-200 p-4">
                   <div className="mb-1 flex items-center justify-between gap-3">
-                    <span className="font-semibold text-gray-900">{item.mapel}</span>
+                    <span className="font-semibold text-gray-900">{item.nama}</span>
                     <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
                       {item.kelas}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600">{item.waktu}</p>
+                  <p className="text-sm text-gray-600">{item.guruPengampu}</p>
                 </div>
               ))}
             </div>
@@ -157,18 +171,10 @@ export default function GuruDashboard() {
             </div>
             <div>
               <h3 className="font-semibold text-gray-900">Tugas Pembelajaran</h3>
-              <p className="text-sm text-gray-600">Daftar pekerjaan guru mapel yang perlu diselesaikan.</p>
+              <p className="text-sm text-gray-600">
+                {tasks[0]?.judul ?? 'Data tugas akan tampil setelah tersedia di backend.'}
+              </p>
             </div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {tugasMapel.map((item) => (
-              <div key={item.title} className={`rounded-lg border p-4 ${item.tone}`}>
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <span className="font-semibold">{item.title}</span>
-                  <span className="text-xs font-medium">{item.deadline}</span>
-                </div>
-              </div>
-            ))}
           </div>
         </motion.div>
       )}
