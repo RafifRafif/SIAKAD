@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -19,10 +19,18 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { clearAuthSession, getAuthSession, type GuruAccess } from '../lib/authStore';
+import { apiGet } from '../lib/apiClient';
+import { loadProfilePhotoUrl, PROFILE_PHOTO_UPDATED_EVENT } from '../lib/profilePhoto';
 
 interface DashboardLayoutProps {
   role: 'admin' | 'guru' | 'siswa';
   children: ReactNode;
+}
+
+interface DashboardProfileResponse {
+  nama: string;
+  guruAccess?: GuruAccess[];
+  fotoProfil?: string | null;
 }
 
 type DashboardRole = DashboardLayoutProps['role'];
@@ -88,6 +96,7 @@ const getGuruMenuItems = (guruAccess: GuruAccess[]): MenuItem[] => {
         { label: 'Presensi Kelas', path: '/guru/presensi' },
         { label: 'Rekap Absensi', path: '/guru/rekap-absensi' },
         { label: 'Input Nilai', path: '/guru/nilai' },
+        { label: "Rekap Al-Qur'an", path: '/guru/quran' },
       ],
     });
   }
@@ -113,6 +122,9 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
   });
   const [guruAccess, setGuruAccess] = useState<GuruAccess[]>([]);
   const [displayName, setDisplayName] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const profilePhotoUrlRef = useRef<string | null>(null);
+  const photoLoadRequestRef = useRef(0);
   const currentPath = pathname ?? '/';
   const currentMenu = useMemo(
     () => (role === 'guru' ? getGuruMenuItems(guruAccess) : menuItems[role]),
@@ -123,23 +135,91 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
       ? `Guru - ${guruAccess.join(' & ')}`
       : roleNames[role];
 
-  useEffect(() => {
-    void getAuthSession()
-      .then((session) => {
+  const replaceProfilePhoto = useCallback((nextPhoto: string | null) => {
+    if (profilePhotoUrlRef.current && profilePhotoUrlRef.current !== nextPhoto) {
+      URL.revokeObjectURL(profilePhotoUrlRef.current);
+      profilePhotoUrlRef.current = null;
+    }
+
+    if (nextPhoto?.startsWith('blob:')) {
+      profilePhotoUrlRef.current = nextPhoto;
+    }
+
+    setProfilePhoto(nextPhoto);
+  }, []);
+
+  const loadDashboardProfilePhoto = useCallback(async (photoUrl: string | null) => {
+    const requestId = photoLoadRequestRef.current + 1;
+    photoLoadRequestRef.current = requestId;
+
+    try {
+      const objectUrl = await loadProfilePhotoUrl(photoUrl);
+
+      if (photoLoadRequestRef.current !== requestId) {
+        if (objectUrl?.startsWith('blob:')) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        return;
+      }
+
+      replaceProfilePhoto(objectUrl);
+    } catch {
+      if (photoLoadRequestRef.current === requestId) {
+        replaceProfilePhoto(null);
+      }
+    }
+  }, [replaceProfilePhoto]);
+
+  const refreshDashboardProfile = useCallback(async () => {
+    try {
+      const profile = await apiGet<DashboardProfileResponse>('/api/profile');
+      setDisplayName(profile.nama ?? '');
+
+      if (role === 'guru') {
+        setGuruAccess(profile.guruAccess ?? []);
+      }
+
+      await loadDashboardProfilePhoto(profile.fotoProfil ?? null);
+    } catch {
+      try {
+        const session = await getAuthSession();
         setDisplayName(session?.displayName ?? '');
 
         if (role === 'guru') {
           setGuruAccess(session?.guruAccess ?? []);
         }
-      })
-      .catch(() => {
+      } catch {
         setDisplayName('');
 
         if (role === 'guru') {
           setGuruAccess([]);
         }
-      });
-  }, [role]);
+      }
+
+      replaceProfilePhoto(null);
+    }
+  }, [loadDashboardProfilePhoto, replaceProfilePhoto, role]);
+
+  useEffect(() => {
+    void refreshDashboardProfile();
+
+    const handleProfilePhotoUpdated = () => {
+      void refreshDashboardProfile();
+    };
+
+    window.addEventListener(PROFILE_PHOTO_UPDATED_EVENT, handleProfilePhotoUpdated);
+
+    return () => {
+      window.removeEventListener(PROFILE_PHOTO_UPDATED_EVENT, handleProfilePhotoUpdated);
+    };
+  }, [refreshDashboardProfile]);
+
+  useEffect(() => () => {
+    if (profilePhotoUrlRef.current) {
+      URL.revokeObjectURL(profilePhotoUrlRef.current);
+      profilePhotoUrlRef.current = null;
+    }
+  }, []);
 
   const isMenuActive = (item: MenuItem) => {
     if (item.path) {
@@ -323,7 +403,15 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
                 className="flex items-center gap-3 rounded-lg px-4 py-2 transition-colors hover:bg-gray-100"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#2563EB] to-blue-400 font-semibold text-white">
-                  {(displayName || roleNames[role]).charAt(0)}
+                  {profilePhoto ? (
+                    <img
+                      src={profilePhoto}
+                      alt="Foto profile"
+                      className="h-full w-full rounded-full object-cover"
+                    />
+                  ) : (
+                    (displayName || roleNames[role]).charAt(0)
+                  )}
                 </div>
                 <div className="hidden text-left sm:block">
                   <div className="text-sm font-semibold text-gray-900">

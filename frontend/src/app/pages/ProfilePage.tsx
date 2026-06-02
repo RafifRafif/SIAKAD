@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { useToast, Toast } from '../components/dashboard/Toast';
 import type { AppRole, GuruAccess } from '../lib/authStore';
 import { ApiError, apiGet, apiPut, apiUpload } from '../lib/apiClient';
+import { loadProfilePhotoUrl, PROFILE_PHOTO_UPDATED_EVENT } from '../lib/profilePhoto';
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,7 @@ export default function ProfilePage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewPhotoUrlRef = useRef<string | null>(null);
+  const photoLoadRequestRef = useRef(0);
   const [formData, setFormData] = useState({
     nama: '',
     email: '',
@@ -101,6 +103,7 @@ export default function ProfilePage() {
     try {
       const profile = await apiUpload<ProfileResponse>('/api/profile/photo', payload);
       applyProfile(profile);
+      window.dispatchEvent(new Event(PROFILE_PHOTO_UPDATED_EVENT));
       showToast('Foto profile berhasil diupdate!', 'success');
     } catch (error) {
       replaceProfilePhoto(previousPhoto);
@@ -176,7 +179,7 @@ export default function ProfilePage() {
     setProfileRoleLabel(profileRoleLabelFromProfile(profile));
     setIdentifierLabel('Akun');
     setIdentifierValue(profile.username);
-    replaceProfilePhoto(profile.fotoProfil ?? null);
+    void loadProfilePhoto(profile.fotoProfil ?? null);
     setFormData({
       nama: profile.nama ?? '',
       email: profile.email ?? '',
@@ -184,6 +187,32 @@ export default function ProfilePage() {
       alamat: profile.alamat ?? '',
       tanggalLahir: profile.tanggalLahir ?? '',
     });
+  };
+
+  const loadProfilePhoto = async (photoUrl: string | null) => {
+    const requestId = photoLoadRequestRef.current + 1;
+    photoLoadRequestRef.current = requestId;
+
+    try {
+      const objectUrl = await loadProfilePhotoUrl(photoUrl);
+
+      if (photoLoadRequestRef.current !== requestId) {
+        if (objectUrl?.startsWith('blob:')) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        return;
+      }
+
+      if (objectUrl?.startsWith('blob:')) {
+        showPreviewPhoto(objectUrl);
+      } else {
+        replaceProfilePhoto(objectUrl);
+      }
+    } catch {
+      if (photoLoadRequestRef.current === requestId) {
+        replaceProfilePhoto(photoUrl);
+      }
+    }
   };
 
   const revokePreviewPhoto = () => {

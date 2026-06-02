@@ -6,7 +6,7 @@ import { ShieldAlert } from 'lucide-react';
 import { getCurrentGuruAccess, type GuruAccess } from '../../lib/authStore';
 
 interface GuruAccessGateProps {
-  requiredAccess: GuruAccess;
+  requiredAccess: GuruAccess | GuruAccess[];
   children: ReactNode;
 }
 
@@ -29,7 +29,9 @@ export default function GuruAccessGate({ requiredAccess, children }: GuruAccessG
     );
   }
 
-  if (!access.includes(requiredAccess)) {
+  const requiredAccessList = Array.isArray(requiredAccess) ? requiredAccess : [requiredAccess];
+
+  if (!requiredAccessList.some((item) => access.includes(item))) {
     return (
       <div className="flex min-h-[420px] items-center justify-center">
         <div className="max-w-md rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
@@ -38,7 +40,7 @@ export default function GuruAccessGate({ requiredAccess, children }: GuruAccessG
           </div>
           <h2 className="text-xl font-bold text-gray-900">Akses tidak tersedia</h2>
           <p className="mt-2 text-sm text-gray-600">
-            Fitur ini hanya ditampilkan untuk guru dengan akses {requiredAccess}.
+            Fitur ini hanya ditampilkan untuk guru dengan akses {requiredAccessList.join(' atau ')}.
             Silakan hubungi admin jika akses Anda perlu diubah.
           </p>
           <Link

@@ -106,10 +106,9 @@ class FrontendFeatureController extends Controller
             ]);
         }
 
-        UserProfile::query()->updateOrCreate(
-            ['user_id' => $user->id],
-            ['profile_photo' => 'data:'.$mimeType.';base64,'.base64_encode($content)],
-        );
+        $profile = UserProfile::query()->firstOrNew(['user_id' => $user->id]);
+        $profile->profile_photo = 'data:'.$mimeType.';base64,'.base64_encode($content);
+        $profile->save();
 
         return response()->json($this->profilePayload($user->fresh(), $request));
     }

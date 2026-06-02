@@ -3,7 +3,7 @@ import SetoranQuran from '../../pages/guru/SetoranQuran';
 
 export default function GuruQuranPage() {
   return (
-    <GuruAccessGate requiredAccess="Wali Kelas">
+    <GuruAccessGate requiredAccess={['Wali Kelas', 'Guru Mapel']}>
       <SetoranQuran />
     </GuruAccessGate>
   );

@@ -16,6 +16,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FrontendFeatureApiTest extends TestCase
@@ -159,6 +160,80 @@ class FrontendFeatureApiTest extends TestCase
             ->assertOk();
 
         $this->assertTrue(Hash::check('password-guru-dual', $user->fresh()->password));
+    }
+
+    /**
+     * @param  list<string>  $userRoles
+     * @param  list<string>|null  $teacherRoles
+     */
+    #[DataProvider('profilePhotoRoleProvider')]
+    public function test_profile_photo_upload_works_for_every_app_role(
+        string $username,
+        array $userRoles,
+        ?array $teacherRoles = null,
+    ): void {
+        if ($teacherRoles !== null) {
+            Teacher::query()->create([
+                'nip' => $username,
+                'nama' => 'Guru Foto '.$username,
+                'tahun_ajaran' => 'Tahun Test',
+                'roles' => $teacherRoles,
+                'email' => strtolower($username).'@example.test',
+                'telepon' => '08000000'.$username,
+                'status' => 'Aktif',
+            ]);
+        }
+
+        if (in_array(User::ROLE_SISWA, $userRoles, true)) {
+            Student::query()->create([
+                'nis' => $username,
+                'nama' => 'Siswa Foto '.$username,
+                'tahun_ajaran' => 'Tahun Test',
+                'kelas' => 'Kelas Test',
+                'jenis_kelamin' => 'Laki-laki',
+                'email' => strtolower($username).'@example.test',
+                'telepon' => '08000000'.$username,
+            ]);
+        }
+
+        $user = User::factory()->create([
+            'name' => 'User Foto '.$username,
+            'username' => $username,
+            'email' => strtolower($username).'@user.test',
+            'roles' => $userRoles,
+        ]);
+
+        $photoResponse = $this->actingAs($user)
+            ->post('/api/profile/photo', [
+                'fotoProfil' => UploadedFile::fake()->create($username.'.webp', 32, 'image/webp'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonStructure(['fotoProfil']);
+
+        $this->assertStringContainsString('/api/profile/photo-content?v=', $photoResponse->json('fotoProfil'));
+
+        $this->actingAs($user)
+            ->get('/api/profile/photo-content')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/webp');
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: list<string>, 2?: list<string>|null}>
+     */
+    public static function profilePhotoRoleProvider(): array
+    {
+        return [
+            'admin' => ['PHOTOADMIN', [User::ROLE_ADMIN]],
+            'siswa' => ['PHOTOSISWA', [User::ROLE_SISWA]],
+            'guru mapel' => ['PHOTOMAPEL', [User::ROLE_GURU_MAPEL], ['Guru Mapel']],
+            'wali kelas' => ['PHOTOWALI', [User::ROLE_WALI_KELAS], ['Wali Kelas']],
+            'guru dual role' => [
+                'PHOTODUAL',
+                [User::ROLE_GURU_MAPEL, User::ROLE_WALI_KELAS],
+                ['Guru Mapel', 'Wali Kelas'],
+            ],
+        ];
     }
 
     public function test_admin_can_import_students_from_csv(): void
