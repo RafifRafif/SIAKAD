@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Download } from 'lucide-react';
 import {
   getAttendanceRecords,
   monthLabelFromDate,
@@ -51,37 +51,48 @@ const dayFromDate = (value?: string | null) => {
 
 export default function MonitoringPresensiKelas() {
   const [records, setRecords] = useState<AttendanceRecordItem[]>([]);
+  const [selectedKelas, setSelectedKelas] = useState('');
   const [selectedMataPelajaran, setSelectedMataPelajaran] = useState('');
   const [selectedBulan, setSelectedBulan] = useState('');
 
   useEffect(() => {
     void getAttendanceRecords()
-      .then((items) => {
-        setRecords(items);
-        setSelectedMataPelajaran((current) => current || items[0]?.mapel || '');
-        setSelectedBulan((current) => current || monthLabelFromDate(items[0]?.tanggal));
-      })
+      .then(setRecords)
       .catch(() => setRecords([]));
   }, []);
 
-  const mataPelajaranOptions = useMemo(
-    () => uniqueValues(records.map((record) => record.mapel)),
+  const kelasOptions = useMemo(
+    () => uniqueValues(records.map((record) => record.kelas)),
     [records]
+  );
+  const mataPelajaranOptions = useMemo(
+    () =>
+      selectedKelas
+        ? uniqueValues(
+            records
+              .filter((record) => record.kelas === selectedKelas)
+              .map((record) => record.mapel)
+          )
+        : [],
+    [records, selectedKelas]
   );
   const bulanOptions = useMemo(
     () => uniqueValues(records.map((record) => monthLabelFromDate(record.tanggal))),
     [records]
   );
 
-  const daftarPresensiSiswa = useMemo(() => {
-    const filteredRecords = records.filter((record) => {
-      const matchMapel =
-        !selectedMataPelajaran || record.mapel === selectedMataPelajaran;
-      const matchBulan =
-        !selectedBulan || monthLabelFromDate(record.tanggal) === selectedBulan;
+  const hasSelectedFilters = Boolean(selectedKelas && selectedMataPelajaran && selectedBulan);
 
-      return matchMapel && matchBulan;
-    });
+  const daftarPresensiSiswa = useMemo(() => {
+    const filteredRecords = hasSelectedFilters
+      ? records.filter((record) => {
+          const matchKelas = record.kelas === selectedKelas;
+          const matchMapel = record.mapel === selectedMataPelajaran;
+          const matchBulan = monthLabelFromDate(record.tanggal) === selectedBulan;
+
+          return matchKelas && matchMapel && matchBulan;
+        })
+      : [];
     const grouped = new Map<
       string,
       {
@@ -111,13 +122,56 @@ export default function MonitoringPresensiKelas() {
     });
 
     return Array.from(grouped.values());
-  }, [records, selectedBulan, selectedMataPelajaran]);
+  }, [hasSelectedFilters, records, selectedBulan, selectedKelas, selectedMataPelajaran]);
 
   const statusTerisi = daftarPresensiSiswa.flatMap((item) => Object.values(item.presensi));
   const totalHadir = statusTerisi.filter((status) => status === 'H').length;
   const totalAlpha = statusTerisi.filter((status) => status === 'A').length;
   const totalSakit = statusTerisi.filter((status) => status === 'S').length;
   const totalIzin = statusTerisi.filter((status) => status === 'I').length;
+
+  const handleDownloadExcel = () => {
+    if (!hasSelectedFilters || daftarPresensiSiswa.length === 0) {
+      return;
+    }
+
+    const headers = [
+      'No',
+      'NIS',
+      'Nama Siswa',
+      ...tanggalPresensi,
+      'Total Hadir',
+      'Total Alpha',
+      'Total Sakit',
+      'Total Izin',
+    ];
+    const rows = daftarPresensiSiswa.map((item, index) => [
+      String(index + 1),
+      item.siswaId,
+      item.nama,
+      ...tanggalPresensi.map((tanggal) => item.presensi[tanggal] ?? '-'),
+      String(countStatus(item.presensi, 'H')),
+      String(countStatus(item.presensi, 'A')),
+      String(countStatus(item.presensi, 'S')),
+      String(countStatus(item.presensi, 'I')),
+    ]);
+    const content = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join('\t'))
+      .join('\n');
+    const blob = new Blob([content], {
+      type: 'application/vnd.ms-excel;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const filenamePart = (value: string) => value.replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '');
+
+    anchor.href = url;
+    anchor.download = `rekap-presensi-${filenamePart(selectedKelas)}-${filenamePart(selectedMataPelajaran)}-${filenamePart(selectedBulan)}.xls`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -128,9 +182,20 @@ export default function MonitoringPresensiKelas() {
             Pantau presensi murid yang diinput oleh guru mata pelajaran
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB]">
-          <ClipboardList size={18} />
-          Rekap Harian Kelas
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button
+            type="button"
+            onClick={handleDownloadExcel}
+            disabled={!hasSelectedFilters || daftarPresensiSiswa.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            <Download size={18} />
+            Download Excel
+          </button>
+          <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB]">
+            <ClipboardList size={18} />
+            Rekap Harian Kelas
+          </div>
         </div>
       </div>
 
@@ -144,7 +209,29 @@ export default function MonitoringPresensiKelas() {
           <p className="mt-1 text-sm text-gray-600">
             H = Hadir, A = Alpha, S = Sakit, I = Izin, dan - = belum ada data
           </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Kelas
+              </label>
+              <select
+                value={selectedKelas}
+                onChange={(event) => {
+                  setSelectedKelas(event.target.value);
+                  setSelectedMataPelajaran('');
+                }}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+              >
+                <option value="" disabled>
+                  Pilih Kelas
+                </option>
+                {kelasOptions.map((kelas) => (
+                  <option key={kelas} value={kelas}>
+                    {kelas}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 Mata Pelajaran
@@ -152,8 +239,12 @@ export default function MonitoringPresensiKelas() {
               <select
                 value={selectedMataPelajaran}
                 onChange={(event) => setSelectedMataPelajaran(event.target.value)}
+                disabled={!selectedKelas}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
               >
+                <option value="" disabled>
+                  Pilih Mata Pelajaran
+                </option>
                 {mataPelajaranOptions.map((mataPelajaran) => (
                   <option key={mataPelajaran} value={mataPelajaran}>
                     {mataPelajaran}
@@ -170,6 +261,9 @@ export default function MonitoringPresensiKelas() {
                 onChange={(event) => setSelectedBulan(event.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
               >
+                <option value="" disabled>
+                  Pilih Bulan
+                </option>
                 {bulanOptions.map((bulan) => (
                   <option key={bulan} value={bulan}>
                     {bulan}
@@ -202,6 +296,26 @@ export default function MonitoringPresensiKelas() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
+              {!hasSelectedFilters && (
+                <tr>
+                  <td
+                    colSpan={3 + tanggalPresensi.length + 4}
+                    className="px-4 py-8 text-center text-sm text-gray-500"
+                  >
+                    Pilih kelas, mata pelajaran, dan bulan terlebih dahulu untuk menampilkan rekap presensi.
+                  </td>
+                </tr>
+              )}
+              {hasSelectedFilters && daftarPresensiSiswa.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={3 + tanggalPresensi.length + 4}
+                    className="px-4 py-8 text-center text-sm text-gray-500"
+                  >
+                    Belum ada data presensi untuk filter yang dipilih.
+                  </td>
+                </tr>
+              )}
               {daftarPresensiSiswa.map((item, index) => (
                 <tr key={item.id} className="transition-colors hover:bg-gray-50">
                   <td className="px-4 py-4 text-center text-sm text-gray-700">{index + 1}</td>

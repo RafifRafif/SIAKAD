@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Save } from 'lucide-react';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { Save, Upload, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { apiGet, apiPost } from '../../lib/apiClient';
@@ -17,12 +17,15 @@ import type { KelasItem } from '../../lib/kelasStore';
 import type { MasterPelajaran } from '../../lib/pelajaranStore';
 import type { StudentItem } from '../../lib/siswaStore';
 
+type JenisPenilaian = 'UTS' | 'UAS' | 'Quiz' | 'Tugas';
+
+const jenisPenilaianOptions: JenisPenilaian[] = ['UTS', 'UAS', 'Quiz', 'Tugas'];
+
 export default function InputNilai() {
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignmentItem[]>([]);
   const [selectedKelas, setSelectedKelas] = useState('');
   const [selectedMapel, setSelectedMapel] = useState('');
-  const [jenisPenilaian, setJenisPenilaian] = useState('');
   const [tanggalSekarang, setTanggalSekarang] = useState('');
   const [bobotPenilaian, setBobotPenilaian] = useState<BobotPenilaianItem[]>(
     defaultBobotPenilaianConfig.bobot
@@ -30,8 +33,10 @@ export default function InputNilai() {
   const [gradeRanges, setGradeRanges] = useState<GradeRangeItem[]>(
     defaultBobotPenilaianConfig.gradeRanges
   );
-  const [nilai, setNilai] = useState<{ [key: number]: string }>({});
+  const [nilai, setNilai] = useState<Record<number, Partial<Record<JenisPenilaian, string>>>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importContent, setImportContent] = useState('');
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
@@ -47,7 +52,14 @@ export default function InputNilai() {
     void apiGet<StudentItem[]>('/api/students')
       .then((items) => {
         setStudents(items);
-        setNilai(Object.fromEntries(items.map((student) => [student.id, ''])));
+        setNilai(
+          Object.fromEntries(
+            items.map((student) => [
+              student.id,
+              Object.fromEntries(jenisPenilaianOptions.map((jenis) => [jenis, ''])),
+            ])
+          )
+        );
       })
       .catch(() => showToast('Gagal memuat data siswa dari backend.', 'error'));
   }, []);
@@ -80,52 +92,144 @@ export default function InputNilai() {
 
   const mapelOptions = useMemo<MasterPelajaran[]>(
     () =>
-      Array.from(
-        new Map(
-          learningAssignments
-            .filter((item) => !selectedKelas || item.kelas === selectedKelas)
-            .map((item) => [
-              item.nama,
-              {
-                id: item.id,
-                nama: item.nama,
-                tahunAjaran: item.tahunAjaran,
-              },
-            ])
-        ).values()
-      ),
+      selectedKelas
+        ? Array.from(
+            new Map(
+              learningAssignments
+                .filter((item) => item.kelas === selectedKelas)
+                .map((item) => [
+                  item.nama,
+                  {
+                    id: item.id,
+                    nama: item.nama,
+                    tahunAjaran: item.tahunAjaran,
+                  },
+                ])
+            ).values()
+          )
+        : [],
     [learningAssignments, selectedKelas]
   );
 
-  useEffect(() => {
-    setSelectedKelas((current) =>
-      current && kelasOptions.some((kelas) => kelas.nama === current)
-        ? current
-        : kelasOptions[0]?.nama ?? ''
-    );
-  }, [kelasOptions]);
-
-  useEffect(() => {
-    setSelectedMapel((current) =>
-      current && mapelOptions.some((mapel) => mapel.nama === current)
-        ? current
-        : mapelOptions[0]?.nama ?? ''
-    );
-  }, [mapelOptions]);
-
   const siswaData = useMemo(
     () =>
-      selectedKelas
+      selectedKelas && selectedMapel
         ? students.filter((student) => student.kelas === selectedKelas)
         : [],
-    [selectedKelas, students]
+    [selectedKelas, selectedMapel, students]
   );
 
-  const handleNilaiChange = (id: number, value: string) => {
+  const hasSelectedFilters = Boolean(selectedKelas && selectedMapel);
+
+  const handleNilaiChange = (id: number, jenis: JenisPenilaian, value: string) => {
     const numValue = parseInt(value);
     if (value === '' || (numValue >= 0 && numValue <= 100)) {
-      setNilai((current) => ({ ...current, [id]: value }));
+      setNilai((current) => ({
+        ...current,
+        [id]: {
+          ...current[id],
+          [jenis]: value,
+        },
+      }));
     }
+  };
+
+  const handleImportFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setImportContent(String(reader.result ?? ''));
+    reader.readAsText(file);
+    event.target.value = '';
+  };
+
+  const handleImportNilai = () => {
+    if (!hasSelectedFilters) {
+      showToast('Pilih kelas dan mata pelajaran terlebih dahulu sebelum import nilai.', 'error');
+      return;
+    }
+
+    const rows = importContent
+      .split(/\r?\n/)
+      .map((row) => row.trim())
+      .filter(Boolean)
+      .map((row) => row.split(',').map((cell) => cell.trim()));
+
+    if (rows.length < 2) {
+      showToast('Format import belum valid. Gunakan header nis,uts,uas,quiz,tugas.', 'error');
+      return;
+    }
+
+    const headers = rows[0].map((header) => header.toLowerCase());
+    const nisIndex = headers.indexOf('nis');
+    const jenisIndexes = Object.fromEntries(
+      jenisPenilaianOptions.map((jenis) => [jenis, headers.indexOf(jenis.toLowerCase())])
+    ) as Record<JenisPenilaian, number>;
+
+    if (nisIndex === -1 || jenisPenilaianOptions.some((jenis) => jenisIndexes[jenis] === -1)) {
+      showToast('Header CSV harus berisi nis, uts, uas, quiz, dan tugas.', 'error');
+      return;
+    }
+
+    const siswaByNis = new Map(siswaData.map((student) => [student.nis, student]));
+    let importedCount = 0;
+    let invalidCount = 0;
+
+    setNilai((current) => {
+      const next = { ...current };
+
+      rows.slice(1).forEach((row) => {
+        const student = siswaByNis.get(row[nisIndex]);
+
+        if (!student) {
+          return;
+        }
+
+        const importedNilai = jenisPenilaianOptions.reduce<Partial<Record<JenisPenilaian, string>>>(
+          (result, jenis) => {
+            const value = row[jenisIndexes[jenis]] ?? '';
+            const numberValue = Number(value);
+
+            if (value === '' || !Number.isInteger(numberValue) || numberValue < 0 || numberValue > 100) {
+              invalidCount += 1;
+              return result;
+            }
+
+            result[jenis] = value;
+            return result;
+          },
+          {}
+        );
+
+        if (Object.keys(importedNilai).length > 0) {
+          importedCount += 1;
+          next[student.id] = {
+            ...next[student.id],
+            ...importedNilai,
+          };
+        }
+      });
+
+      return next;
+    });
+
+    if (importedCount === 0) {
+      showToast('Tidak ada NIS yang cocok dengan siswa pada kelas ini.', 'error');
+      return;
+    }
+
+    setIsImportModalOpen(false);
+    setImportContent('');
+    showToast(
+      invalidCount > 0
+        ? `Import selesai untuk ${importedCount} siswa. Beberapa nilai tidak valid dilewati.`
+        : `Import nilai berhasil untuk ${importedCount} siswa.`,
+      'success'
+    );
   };
 
   const handleSubmit = async () => {
@@ -133,8 +237,8 @@ export default function InputNilai() {
       return;
     }
 
-    if (!selectedKelas || !selectedMapel || !jenisPenilaian || !tanggalSekarang) {
-      showToast('Pilih kelas, mata pelajaran, jenis penilaian, dan tanggal terlebih dahulu.', 'error');
+    if (!selectedKelas || !selectedMapel || !tanggalSekarang) {
+      showToast('Pilih kelas, mata pelajaran, dan tanggal terlebih dahulu.', 'error');
       return;
     }
 
@@ -143,9 +247,11 @@ export default function InputNilai() {
       return;
     }
 
-    const allFilled = siswaData.every((student) => nilai[student.id] !== '');
+    const allFilled = siswaData.every((student) =>
+      jenisPenilaianOptions.every((jenis) => nilai[student.id]?.[jenis] !== '')
+    );
     if (!allFilled) {
-      showToast('Harap isi nilai semua siswa!', 'error');
+      showToast('Harap isi semua jenis nilai untuk setiap siswa!', 'error');
       return;
     }
 
@@ -153,17 +259,19 @@ export default function InputNilai() {
 
     try {
       await Promise.all(
-        siswaData.map((student) =>
-          apiPost('/api/grades', {
-            nis: student.nis,
-            nama: student.nama,
-            kelas: student.kelas,
-            tahunAjaran: student.tahunAjaran,
-            mapel: selectedMapel,
-            jenis: jenisPenilaian,
-            nilai: Number(nilai[student.id]),
-            tanggal: tanggalSekarang,
-          })
+        siswaData.flatMap((student) =>
+          jenisPenilaianOptions.map((jenis) =>
+            apiPost('/api/grades', {
+              nis: student.nis,
+              nama: student.nama,
+              kelas: student.kelas,
+              tahunAjaran: student.tahunAjaran,
+              mapel: selectedMapel,
+              jenis,
+              nilai: Number(nilai[student.id]?.[jenis]),
+              tanggal: tanggalSekarang,
+            })
+          )
         )
       );
 
@@ -176,18 +284,26 @@ export default function InputNilai() {
   };
 
   const getRataRata = () => {
-    const validNilai = siswaData
-      .map((student) => nilai[student.id])
-      .filter((item) => item !== '')
-      .map((item) => parseInt(item));
+    const validNilai = siswaData.flatMap((student) =>
+      jenisPenilaianOptions
+        .map((jenis) => nilai[student.id]?.[jenis])
+        .filter((item): item is string => Boolean(item))
+        .map((item) => parseInt(item))
+    );
 
     if (validNilai.length === 0) return 0;
     return (validNilai.reduce((a, b) => a + b, 0) / validNilai.length).toFixed(2);
   };
 
-  const bobotAktif = useMemo(
-    () => bobotPenilaian.find((item) => item.jenisPenilaian === jenisPenilaian)?.bobot ?? 0,
-    [bobotPenilaian, jenisPenilaian]
+  const bobotByJenis = useMemo(
+    () =>
+      Object.fromEntries(
+        jenisPenilaianOptions.map((jenis) => [
+          jenis,
+          bobotPenilaian.find((item) => item.jenisPenilaian === jenis)?.bobot ?? 0,
+        ])
+      ) as Record<JenisPenilaian, number>,
+    [bobotPenilaian]
   );
 
   return (
@@ -201,24 +317,102 @@ export default function InputNilai() {
         />
       ))}
 
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Input Nilai</h2>
-        <p className="text-gray-600 mt-1">Input nilai ujian dan tugas siswa</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Input Nilai</h2>
+          <p className="text-gray-600 mt-1">Input nilai ujian dan tugas siswa</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsImportModalOpen(true)}
+          disabled={!hasSelectedFilters}
+          className="flex items-center justify-center gap-2 rounded-lg border border-green-500 bg-green-500 px-6 py-3 font-medium text-white shadow-sm transition-all hover:bg-green-600 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300"
+        >
+          <Upload size={20} />
+          <span>Import Nilai</span>
+        </button>
       </div>
 
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl rounded-xl bg-white shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <div>
+                <h3 className="font-semibold text-gray-900">Import Nilai</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Gunakan CSV dengan header nis,uts,uas,quiz,tugas
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                aria-label="Tutup modal import nilai"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                Format contoh: nis,uts,uas,quiz,tugas
+              </div>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleImportFileChange}
+                className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-[#2563EB] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+              />
+              <textarea
+                value={importContent}
+                onChange={(event) => setImportContent(event.target.value)}
+                rows={8}
+                placeholder={'nis,uts,uas,quiz,tugas\n2026001,85,90,80,88\n2026002,78,82,75,84'}
+                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-[#2563EB]"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="rounded-lg border border-gray-300 px-5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-white"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleImportNilai}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#2563EB] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                <Upload size={16} />
+                Import
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="grid md:grid-cols-4 gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Kelas
             </label>
             <select
               value={selectedKelas}
-              onChange={(e) => setSelectedKelas(e.target.value)}
+              onChange={(e) => {
+                setSelectedKelas(e.target.value);
+                setSelectedMapel('');
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
               <option value="" disabled>
-                Pilih kelas
+                Pilih Kelas
               </option>
               {kelasOptions.map((kelas) => (
                 <option key={kelas.id} value={kelas.nama}>
@@ -234,33 +428,15 @@ export default function InputNilai() {
             <select
               value={selectedMapel}
               onChange={(e) => setSelectedMapel(e.target.value)}
+              disabled={!selectedKelas}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
               <option value="" disabled>
-                Pilih mata pelajaran
+                Pilih Mata Pelajaran
               </option>
               {mapelOptions.map((mapel) => (
                 <option key={mapel.id} value={mapel.nama}>
                   {mapel.nama}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Jenis Penilaian
-            </label>
-            <select
-              value={jenisPenilaian}
-              onChange={(e) => setJenisPenilaian(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
-            >
-              <option value="" disabled>
-                Pilih jenis penilaian
-              </option>
-              {['UTS', 'UAS', 'Tugas', 'Quiz'].map((jenis) => (
-                <option key={jenis} value={jenis}>
-                  {jenis}
                 </option>
               ))}
             </select>
@@ -280,24 +456,23 @@ export default function InputNilai() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="font-semibold text-gray-900">Input Nilai - {selectedMapel || '-'}</h3>
             <p className="text-sm text-gray-600 mt-1">
-              Kelas {selectedKelas || '-'} - {jenisPenilaian}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              Grade mengikuti pengaturan admin. Bobot {jenisPenilaian}: {bobotAktif}%
+              Kelas {selectedKelas || '-'}
             </p>
           </div>
-          <div className="px-4 py-2 bg-blue-50 rounded-lg">
-            <p className="text-sm text-gray-600">Rata-rata Kelas</p>
-            <p className="text-2xl font-bold text-[#2563EB]">{getRataRata()}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="px-4 py-2 bg-blue-50 rounded-lg">
+              <p className="text-sm text-gray-600">Rata-rata Kelas</p>
+              <p className="text-2xl font-bold text-[#2563EB]">{getRataRata()}</p>
+            </div>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[960px]">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
@@ -309,19 +484,45 @@ export default function InputNilai() {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
                   Nama Siswa
                 </th>
+                {jenisPenilaianOptions.map((jenis) => (
+                  <th
+                    key={jenis}
+                    className="px-4 py-4 text-center text-xs font-semibold text-gray-600 uppercase"
+                  >
+                    {jenis}
+                  </th>
+                ))}
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  Nilai (0-100)
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  Grade
+                  Rata-rata
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
+              {!hasSelectedFilters && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                    Pilih kelas dan mata pelajaran terlebih dahulu untuk menampilkan data nilai.
+                  </td>
+                </tr>
+              )}
+              {hasSelectedFilters && siswaData.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                    Belum ada data siswa untuk kelas dan mata pelajaran yang dipilih.
+                  </td>
+                </tr>
+              )}
               {siswaData.map((siswa, index) => {
-                const hasNilai = nilai[siswa.id] !== undefined && nilai[siswa.id] !== '';
-                const nilaiSiswa = Number(nilai[siswa.id]);
-                const grade = getGradeLabel(nilaiSiswa, gradeRanges);
+                const nilaiSiswa = jenisPenilaianOptions
+                  .map((jenis) => nilai[siswa.id]?.[jenis])
+                  .filter((item): item is string => Boolean(item))
+                  .map((item) => Number(item));
+                const rataRataSiswa =
+                  nilaiSiswa.length > 0
+                    ? nilaiSiswa.reduce((total, item) => total + item, 0) / nilaiSiswa.length
+                    : null;
+                const grade =
+                  rataRataSiswa === null ? null : getGradeLabel(rataRataSiswa, gradeRanges);
                 return (
                   <motion.tr
                     key={siswa.id}
@@ -335,19 +536,21 @@ export default function InputNilai() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{siswa.nis}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{siswa.nama}</td>
+                    {jenisPenilaianOptions.map((jenis) => (
+                      <td key={jenis} className="px-4 py-4 text-center">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={nilai[siswa.id]?.[jenis] ?? ''}
+                          onChange={(e) => handleNilaiChange(siswa.id, jenis, e.target.value)}
+                          placeholder="0-100"
+                          className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-center outline-none focus:ring-2 focus:ring-[#2563EB]"
+                        />
+                      </td>
+                    ))}
                     <td className="px-6 py-4">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={nilai[siswa.id] ?? ''}
-                        onChange={(e) => handleNilaiChange(siswa.id, e.target.value)}
-                        placeholder="0-100"
-                        className="w-32 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
-                      />
-                    </td>
-                    <td className="px-6 py-4">
-                      {hasNilai && !Number.isNaN(nilaiSiswa) && (
+                      {rataRataSiswa !== null && grade !== null && (
                         <span
                           className={`px-3 py-1 rounded-full font-medium ${
                             grade === 'A'
@@ -359,7 +562,7 @@ export default function InputNilai() {
                               : 'bg-red-100 text-red-700'
                           }`}
                         >
-                          {grade}
+                          {rataRataSiswa.toFixed(2)} / {grade}
                         </span>
                       )}
                     </td>
@@ -380,6 +583,7 @@ export default function InputNilai() {
           </button>
         </div>
       </div>
+
     </div>
   );
 }

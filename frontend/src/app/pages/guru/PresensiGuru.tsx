@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, CircleCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { apiGet, apiPost } from '../../lib/apiClient';
@@ -93,46 +93,47 @@ export default function PresensiGuru() {
 
   const mapelOptions = useMemo<MasterPelajaran[]>(
     () =>
-      Array.from(
-        new Map(
-          learningAssignments
-            .filter((item) => !selectedKelas || item.kelas === selectedKelas)
-            .map((item) => [
-              item.nama,
-              {
-                id: item.id,
-                nama: item.nama,
-                tahunAjaran: item.tahunAjaran,
-              },
-            ])
-        ).values()
-      ),
+      selectedKelas
+        ? Array.from(
+            new Map(
+              learningAssignments
+                .filter((item) => item.kelas === selectedKelas)
+                .map((item) => [
+                  item.nama,
+                  {
+                    id: item.id,
+                    nama: item.nama,
+                    tahunAjaran: item.tahunAjaran,
+                  },
+                ])
+            ).values()
+          )
+        : [],
     [learningAssignments, selectedKelas]
   );
 
-  useEffect(() => {
-    setSelectedKelas((current) =>
-      current && kelasOptions.some((kelas) => kelas.nama === current)
-        ? current
-        : kelasOptions[0]?.nama ?? ''
-    );
-  }, [kelasOptions]);
-
-  useEffect(() => {
-    setSelectedMapel((current) =>
-      current && mapelOptions.some((mapel) => mapel.nama === current)
-        ? current
-        : mapelOptions[0]?.nama ?? ''
-    );
-  }, [mapelOptions]);
-
   const siswaData = useMemo(
     () =>
-      selectedKelas
+      selectedKelas && selectedMapel
         ? students.filter((student) => student.kelas === selectedKelas)
-        : students,
-    [selectedKelas, students]
+        : [],
+    [selectedKelas, selectedMapel, students]
   );
+
+  const hasSelectedFilters = Boolean(selectedKelas && selectedMapel);
+
+  const statusCounts = useMemo(
+    () => ({
+      hadir: siswaData.filter((student) => presensi[student.id] === 'hadir').length,
+      alpha: siswaData.filter((student) => presensi[student.id] === 'alpha').length,
+      sakit: siswaData.filter((student) => presensi[student.id] === 'sakit').length,
+      izin: siswaData.filter((student) => presensi[student.id] === 'izin').length,
+    }),
+    [presensi, siswaData]
+  );
+
+  const isAllHadirSelected =
+    siswaData.length > 0 && siswaData.every((student) => presensi[student.id] === 'hadir');
 
   const handleToggle = (id: number, status: PresensiStatus) => {
     const nextStatus = presensi[id] === status ? null : status;
@@ -141,6 +142,24 @@ export default function PresensiGuru() {
     if (nextStatus !== 'izin') {
       setKeterangan((current) => ({ ...current, [id]: '' }));
     }
+  };
+
+  const handleSelectAllHadir = () => {
+    if (siswaData.length === 0) {
+      showToast('Belum ada data siswa untuk kelas ini.', 'error');
+      return;
+    }
+
+    const nextStatus = isAllHadirSelected ? null : 'hadir';
+
+    setPresensi((current) => ({
+      ...current,
+      ...Object.fromEntries(siswaData.map((student) => [student.id, nextStatus])),
+    }));
+    setKeterangan((current) => ({
+      ...current,
+      ...Object.fromEntries(siswaData.map((student) => [student.id, ''])),
+    }));
   };
 
   const handleKeteranganChange = (id: number, value: string) => {
@@ -152,8 +171,8 @@ export default function PresensiGuru() {
       return;
     }
 
-    if (!selectedMapel) {
-      showToast('Pilih mata pelajaran terlebih dahulu.', 'error');
+    if (!selectedKelas || !selectedMapel) {
+      showToast('Pilih kelas dan mata pelajaran terlebih dahulu.', 'error');
       return;
     }
 
@@ -226,9 +245,15 @@ export default function PresensiGuru() {
             </label>
             <select
               value={selectedKelas}
-              onChange={(e) => setSelectedKelas(e.target.value)}
+              onChange={(e) => {
+                setSelectedKelas(e.target.value);
+                setSelectedMapel('');
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
+              <option value="" disabled>
+                Pilih Kelas
+              </option>
               {kelasOptions.map((kelas) => (
                 <option key={kelas.id} value={kelas.nama}>
                   {kelas.nama}
@@ -254,8 +279,12 @@ export default function PresensiGuru() {
             <select
               value={selectedMapel}
               onChange={(e) => setSelectedMapel(e.target.value)}
+              disabled={!selectedKelas}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             >
+              <option value="" disabled>
+                Pilih Mata Pelajaran
+              </option>
               {mapelOptions.map((mapel) => (
                 <option key={mapel.id} value={mapel.nama}>
                   {mapel.nama}
@@ -267,11 +296,22 @@ export default function PresensiGuru() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900">Daftar Siswa - Kelas {selectedKelas || '-'}</h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Pilih satu status presensi untuk setiap siswa
-          </p>
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-900">Daftar Siswa - Kelas {selectedKelas || '-'}</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Pilih satu status presensi untuk setiap siswa
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSelectAllHadir}
+            disabled={siswaData.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition-all hover:border-green-300 hover:bg-green-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
+          >
+            <CircleCheck size={18} strokeWidth={2.5} />
+            Hadir Semua
+          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -293,6 +333,20 @@ export default function PresensiGuru() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
+              {!hasSelectedFilters && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                    Pilih kelas dan mata pelajaran terlebih dahulu untuk menampilkan data presensi.
+                  </td>
+                </tr>
+              )}
+              {hasSelectedFilters && siswaData.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                    Belum ada data siswa untuk kelas dan mata pelajaran yang dipilih.
+                  </td>
+                </tr>
+              )}
               {siswaData.map((siswa, index) => (
                 <motion.tr
                   key={siswa.id}
@@ -349,19 +403,19 @@ export default function PresensiGuru() {
             <div className="text-sm text-gray-600">
               Total: {siswaData.length} siswa |{' '}
               <span className="text-green-600 font-medium">
-                Hadir: {Object.values(presensi).filter((s) => s === 'hadir').length}
+                Hadir: {statusCounts.hadir}
               </span>{' '}
               |{' '}
               <span className="text-red-600 font-medium">
-                Alpha: {Object.values(presensi).filter((s) => s === 'alpha').length}
+                Alpha: {statusCounts.alpha}
               </span>{' '}
               |{' '}
               <span className="text-amber-600 font-medium">
-                Sakit: {Object.values(presensi).filter((s) => s === 'sakit').length}
+                Sakit: {statusCounts.sakit}
               </span>{' '}
               |{' '}
               <span className="text-blue-600 font-medium">
-                Izin: {Object.values(presensi).filter((s) => s === 'izin').length}
+                Izin: {statusCounts.izin}
               </span>
             </div>
             <button

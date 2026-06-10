@@ -212,6 +212,58 @@ class FrontendFeatureController extends Controller
         ]);
     }
 
+    public function importTeachers(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'file' => ['required', 'file', 'max:5120'],
+        ]);
+
+        /** @var UploadedFile $file */
+        $file = $data['file'];
+        $rows = $this->rowsFromUploadedFile($file);
+        $imported = 0;
+        $skipped = [];
+
+        foreach ($rows as $index => $row) {
+            $nip = trim((string) ($row['nip'] ?? ''));
+            $nama = trim((string) ($row['nama'] ?? ''));
+            $tahunAjaran = trim((string) ($row['tahunAjaran'] ?? ''));
+            $roles = $this->teacherRolesFromImport((string) ($row['role'] ?? ''));
+
+            if ($nip === '' || $nama === '' || $tahunAjaran === '' || $roles === []) {
+                $skipped[] = [
+                    'row' => $index + 2,
+                    'message' => 'NIP, nama, tahun ajaran, dan role wajib diisi.',
+                ];
+                continue;
+            }
+
+            $teacher = Teacher::query()->updateOrCreate(
+                ['nip' => $nip],
+                [
+                    'nama' => $nama,
+                    'tahun_ajaran' => $tahunAjaran,
+                    'roles' => $roles,
+                    'email' => $row['email'] ?: null,
+                    'telepon' => $row['telepon'] ?: null,
+                    'status' => in_array($row['status'] ?? '', ['Aktif', 'Cuti'], true)
+                        ? $row['status']
+                        : 'Aktif',
+                ],
+            );
+
+            $this->syncImportedTeacherUser($teacher);
+            $imported++;
+        }
+
+        return response()->json([
+            'message' => 'Import data guru selesai.',
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'teachers' => Teacher::query()->orderBy('id')->get()->map->toFrontend()->values(),
+        ]);
+    }
+
     public function reportOptions(): JsonResponse
     {
         $months = AttendanceRecord::query()
@@ -430,7 +482,7 @@ class FrontendFeatureController extends Controller
 
         $version = substr(sha1($profile->profile_photo), 0, 12);
 
-        return $request->getSchemeAndHttpHost().'/api/profile/photo-content?v='.$version;
+        return '/api/profile/photo-content?v='.$version;
     }
 
     /**
@@ -521,12 +573,15 @@ class FrontendFeatureController extends Controller
         foreach (array_slice($rows, 1) as $row) {
             $mapped = [
                 'nis' => '',
+                'nip' => '',
                 'nama' => '',
                 'tahunAjaran' => '',
                 'kelas' => '',
                 'jenisKelamin' => '',
+                'role' => '',
                 'email' => '',
                 'telepon' => '',
+                'status' => '',
             ];
 
             foreach ($row as $index => $value) {
@@ -668,12 +723,15 @@ class FrontendFeatureController extends Controller
     {
         return match ($header) {
             'nis', 'nomorinduk', 'nomorinduksiswa' => 'nis',
+            'nip', 'nomorindukpegawai', 'nomorindukguru' => 'nip',
             'nama', 'namalengkap', 'namasiswa' => 'nama',
             'tahunajaran', 'tahun' => 'tahunAjaran',
             'kelas', 'class' => 'kelas',
             'jeniskelamin', 'jk', 'gender' => 'jenisKelamin',
+            'role', 'roles', 'akses', 'aksesguru' => 'role',
             'email', 'emailaddress', 'surel' => 'email',
             'telepon', 'telp', 'nohp', 'hp', 'phone' => 'telepon',
+            'status' => 'status',
             default => null,
         };
     }
@@ -690,6 +748,55 @@ class FrontendFeatureController extends Controller
 
         if (! $user->exists) {
             $user->password = Hash::make($student->nis);
+        }
+
+        $user->save();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function teacherRolesFromImport(string $value): array
+    {
+        $roles = collect(preg_split('/[|,;]/', $value) ?: [])
+            ->map(fn ($role) => strtolower(trim($role)))
+            ->filter()
+            ->flatMap(function (string $role): array {
+                return match ($role) {
+                    'guru mapel', 'mapel', 'guru mata pelajaran' => ['Guru Mapel'],
+                    'wali kelas', 'wali' => ['Wali Kelas'],
+                    default => [],
+                };
+            })
+            ->unique()
+            ->values()
+            ->all();
+
+        return $roles;
+    }
+
+    private function syncImportedTeacherUser(Teacher $teacher): void
+    {
+        $roles = [];
+
+        if (in_array('Guru Mapel', $teacher->roles ?? [], true)) {
+            $roles[] = User::ROLE_GURU_MAPEL;
+        }
+
+        if (in_array('Wali Kelas', $teacher->roles ?? [], true)) {
+            $roles[] = User::ROLE_WALI_KELAS;
+        }
+
+        $user = User::query()->firstOrNew(['username' => $teacher->nip]);
+        $user->fill([
+            'name' => $teacher->nama,
+            'email' => $teacher->email ?: strtolower($teacher->nip).'@siakad.local',
+            'roles' => $roles,
+            'email_verified_at' => now(),
+        ]);
+
+        if (! $user->exists) {
+            $user->password = Hash::make($teacher->nip);
         }
 
         $user->save();

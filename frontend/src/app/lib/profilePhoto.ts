@@ -5,7 +5,12 @@ export async function loadProfilePhotoUrl(photoUrl: string | null): Promise<stri
     return photoUrl;
   }
 
-  const response = await fetch(photoUrl, {
+  const requestUrl = new URL(photoUrl, window.location.origin);
+  const sameAppApiUrl = requestUrl.pathname.startsWith('/api/')
+    ? `${requestUrl.pathname}${requestUrl.search}`
+    : photoUrl;
+
+  const response = await fetch(sameAppApiUrl, {
     credentials: 'include',
     headers: {
       Accept: 'image/*',

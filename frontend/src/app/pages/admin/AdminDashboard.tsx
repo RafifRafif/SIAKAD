@@ -1,64 +1,39 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Users, GraduationCap, ClipboardCheck, TrendingUp } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import { useEffect, useState } from 'react';
+import { Users, GraduationCap, School, BookOpen } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
-import { motion } from 'motion/react';
+import { apiGet } from '../../lib/apiClient';
 import {
   emptyDashboardSummary,
-  formatDisplayDate,
   getDashboardSummary,
   type DashboardSummary,
 } from '../../lib/academicActivityStore';
-
-const AdminDashboardCharts = dynamic(() => import('./AdminDashboardCharts'), {
-  ssr: false,
-  loading: () => <ChartGridSkeleton />,
-});
-
-function ChartGridSkeleton() {
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      {[0, 1].map((item) => (
-        <div
-          key={item}
-          className="h-[397px] animate-pulse rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
-        >
-          <div className="mb-6 h-6 w-48 rounded bg-gray-200" />
-          <div className="h-[300px] rounded-lg bg-gray-100" />
-        </div>
-      ))}
-    </div>
-  );
-}
+import type { KelasItem } from '../../lib/kelasStore';
+import type { MasterPelajaran } from '../../lib/pelajaranStore';
 
 export default function AdminDashboard() {
   const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
+  const [totalKelas, setTotalKelas] = useState(0);
+  const [totalPelajaran, setTotalPelajaran] = useState(0);
 
   useEffect(() => {
-    void getDashboardSummary()
-      .then(setSummary)
-      .catch(() => setSummary(emptyDashboardSummary));
+    void Promise.all([
+      getDashboardSummary(),
+      apiGet<KelasItem[]>('/api/school-classes'),
+      apiGet<MasterPelajaran[]>('/api/subjects'),
+    ])
+      .then(([summaryData, kelasItems, pelajaranItems]) => {
+        setSummary(summaryData);
+        setTotalKelas(kelasItems.length);
+        setTotalPelajaran(pelajaranItems.length);
+      })
+      .catch(() => {
+        setSummary(emptyDashboardSummary);
+        setTotalKelas(0);
+        setTotalPelajaran(0);
+      });
   }, []);
-
-  const recentActivities = useMemo(
-    () => [
-      ...summary.siswa.nilaiTerbaru.map((item) => ({
-        time: formatDisplayDate(item.tanggal),
-        action: `Nilai ${item.mapel} ${item.nama} tersimpan dari backend`,
-      })),
-      ...summary.siswa.presensiTerbaru.map((item) => ({
-        time: formatDisplayDate(item.tanggal),
-        action: `Presensi ${item.nama} tercatat ${item.status}`,
-      })),
-      ...summary.siswa.quranTerbaru.map((item) => ({
-        time: formatDisplayDate(item.tanggal),
-        action: `Setoran Qur'an ${item.nama} tercatat`,
-      })),
-    ],
-    [summary]
-  );
 
   return (
     <div className="space-y-8">
@@ -76,57 +51,34 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           icon={Users}
-          label="Total Siswa"
+          label="Data Siswa"
           value={String(summary.admin.totalSiswa)}
           color="bg-blue-100 text-blue-600"
+          detailHref="/admin/siswa"
         />
         <StatCard
           icon={GraduationCap}
-          label="Total Guru"
+          label="Data Guru"
           value={String(summary.admin.totalGuru)}
           color="bg-green-100 text-green-600"
+          detailHref="/admin/guru"
         />
         <StatCard
-          icon={ClipboardCheck}
-          label="Presensi Hari Ini"
-          value={summary.admin.presensiHariIni === null ? '0%' : `${summary.admin.presensiHariIni}%`}
+          icon={School}
+          label="Data Kelas"
+          value={String(totalKelas)}
           color="bg-purple-100 text-purple-600"
+          detailHref="/admin/kelas"
         />
         <StatCard
-          icon={TrendingUp}
-          label="Rata-rata Nilai"
-          value={summary.admin.rataRataNilai === null ? '0' : String(summary.admin.rataRataNilai)}
+          icon={BookOpen}
+          label="Data Pelajaran"
+          value={String(totalPelajaran)}
           color="bg-orange-100 text-orange-600"
+          detailHref="/admin/pelajaran"
         />
       </div>
 
-      <AdminDashboardCharts />
-
-      {/* Recent Activities */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
-      >
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">
-          Aktivitas Terbaru
-        </h3>
-        <div className="space-y-4">
-          {recentActivities.map((activity, index) => (
-            <div
-              key={`${activity.action}-${index}`}
-              className="flex items-start gap-4 p-4 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <div className="w-2 h-2 bg-[#2563EB] rounded-full mt-2" />
-              <div className="flex-1">
-                <p className="text-gray-900 text-sm">{activity.action}</p>
-                <p className="text-xs text-gray-500 mt-1">{activity.time}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
     </div>
   );
 }

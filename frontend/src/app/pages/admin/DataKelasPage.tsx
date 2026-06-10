@@ -11,6 +11,8 @@ import { defaultGuruData, type GuruItem } from '../../lib/guruStore';
 import { defaultSiswaData, type StudentItem } from '../../lib/siswaStore';
 import {
   defaultTahunAjaranData,
+  tahunAjaranOptionLabel,
+  tahunAjaranOptionValue,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
@@ -20,7 +22,7 @@ export default function DataKelasPage() {
     defaultGuruData.filter((item) => item.role.includes('Wali Kelas'))
   );
   const [students, setStudents] = useState<StudentItem[]>(defaultSiswaData);
-  const [filterTahunAjaran, setFilterTahunAjaran] = useState('all');
+  const [filterTahunAjaran, setFilterTahunAjaran] = useState('');
   const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
     defaultTahunAjaranData
   );
@@ -71,7 +73,11 @@ export default function DataKelasPage() {
     [students]
   );
   const tahunAjaranList = useMemo(
-    () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
+    () =>
+      tahunAjaranOptions.map((item) => ({
+        value: tahunAjaranOptionValue(item),
+        label: tahunAjaranOptionLabel(item),
+      })),
     [tahunAjaranOptions]
   );
 
@@ -81,12 +87,12 @@ export default function DataKelasPage() {
       item.kelompok.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.waliKelas ?? '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTahunAjaran =
-      filterTahunAjaran === 'all' || item.tahunAjaran === filterTahunAjaran;
+      filterTahunAjaran !== '' && item.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesTahunAjaran;
   });
 
   const handleAdd = () => {
-    if (tahunAjaranList.length <= 1) {
+    if (tahunAjaranList.length === 0) {
       showToast('Tambahkan tahun ajaran terlebih dahulu sebelum membuat kelas.', 'error');
       return;
     }
@@ -210,9 +216,12 @@ export default function DataKelasPage() {
             onChange={(e) => setFilterTahunAjaran(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
           >
+            <option value="" disabled>
+              Pilih Tahun Ajaran
+            </option>
             {tahunAjaranList.map((tahunAjaran) => (
-              <option key={tahunAjaran} value={tahunAjaran}>
-                {tahunAjaran === 'all' ? 'Semua Tahun Ajaran' : tahunAjaran}
+              <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                {tahunAjaran.label}
               </option>
             ))}
           </select>
@@ -221,7 +230,14 @@ export default function DataKelasPage() {
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         {filteredKelas.length === 0 ? (
-          <EmptyState message="Tidak ada data kelas" description="Silakan tambahkan kelas baru" />
+          <EmptyState
+            message={filterTahunAjaran ? 'Tidak ada data kelas' : 'Pilih tahun ajaran'}
+            description={
+              filterTahunAjaran
+                ? 'Silakan tambahkan kelas baru'
+                : 'Data kelas akan tampil setelah tahun ajaran dipilih'
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -329,9 +345,9 @@ export default function DataKelasPage() {
                       <option value="" disabled>
                         Pilih tahun ajaran
                       </option>
-                      {tahunAjaranList.filter((item) => item !== 'all').map((tahunAjaran) => (
-                        <option key={tahunAjaran} value={tahunAjaran}>
-                          {tahunAjaran}
+                      {tahunAjaranList.map((tahunAjaran) => (
+                        <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                          {tahunAjaran.label}
                         </option>
                       ))}
                     </select>

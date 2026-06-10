@@ -149,7 +149,10 @@ class AcademicActivityController extends Controller
 
         $attendanceRecord = AttendanceRecord::query()
             ->where('nis', $payload['nis'])
+            ->where('kelas', $payload['kelas'])
+            ->where('tahun_ajaran', $payload['tahun_ajaran'])
             ->where('mapel', $payload['mapel'])
+            ->where('guru', $payload['guru'])
             ->whereDate('tanggal', $payload['tanggal'])
             ->first();
 

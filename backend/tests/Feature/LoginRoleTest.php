@@ -26,7 +26,7 @@ class LoginRoleTest extends TestCase
     ): void {
         $this->createLoginUser($username, $guruAccess ?: [$expectedRole]);
 
-        $response = $this->postJson('/login', [
+        $response = $this->postJson('/api/auth/login', [
             'username' => $username,
             'password' => $username,
         ]);
@@ -35,22 +35,29 @@ class LoginRoleTest extends TestCase
             ->assertOk()
             ->assertJsonPath('redirect_to', $expectedRedirect)
             ->assertJsonPath('user.role', $expectedRole)
-            ->assertJsonPath('user.guruAccess', $guruAccess);
+            ->assertJsonPath('user.guruAccess', $guruAccess)
+            ->assertJsonPath('token_type', 'Bearer')
+            ->assertJsonStructure(['access_token', 'expires_in']);
 
-        $this->assertAuthenticated();
+        $token = $response->json('access_token');
+
+        $this
+            ->withToken($token)
+            ->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('user.username', $username);
     }
 
     public function test_login_rejects_invalid_password(): void
     {
         $this->createLoginUser('admin', [User::ROLE_ADMIN]);
 
-        $response = $this->postJson('/login', [
+        $response = $this->postJson('/api/auth/login', [
             'username' => 'admin',
             'password' => 'salah',
         ]);
 
         $response->assertStatus(422);
-        $this->assertGuest();
     }
 
     public function test_linked_student_account_is_sent_to_student_dashboard_even_if_roles_are_stale(): void
@@ -74,7 +81,7 @@ class LoginRoleTest extends TestCase
             'email_verified_at' => now(),
         ]);
 
-        $this->postJson('/login', [
+        $this->postJson('/api/auth/login', [
             'username' => 'SIS099',
             'password' => 'SIS099',
         ])
@@ -104,7 +111,7 @@ class LoginRoleTest extends TestCase
             'email_verified_at' => now(),
         ]);
 
-        $this->postJson('/login', [
+        $this->postJson('/api/auth/login', [
             'username' => 'TCH099',
             'password' => 'TCH099',
         ])

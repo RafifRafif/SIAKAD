@@ -21,6 +21,9 @@ interface BackendAuthUser {
 interface BackendAuthResponse {
   redirect_to: string;
   user: BackendAuthUser;
+  access_token?: string;
+  token_type?: 'Bearer';
+  expires_in?: number;
 }
 
 const toAuthSession = (user: BackendAuthUser): AuthSession => ({
@@ -35,7 +38,7 @@ export const resolveLoginSession = async (
   password: string,
 ): Promise<{ session: AuthSession; redirectTo: string } | null> => {
   try {
-    const response = await apiPost<BackendAuthResponse>('/login', {
+    const response = await apiPost<BackendAuthResponse>('/api/auth/login', {
       username,
       password,
     });
@@ -55,7 +58,7 @@ export const resolveLoginSession = async (
 
 export const getAuthSession = async (): Promise<AuthSession | null> => {
   try {
-    const response = await apiGet<BackendAuthResponse>('/api/me');
+    const response = await apiGet<BackendAuthResponse>('/api/auth/me');
     return toAuthSession(response.user);
   } catch (error) {
     if (error instanceof ApiError && [401, 403].includes(error.status)) {
@@ -73,7 +76,7 @@ export const getCurrentGuruAccess = async (): Promise<GuruAccess[]> => {
 
 export const clearAuthSession = async () => {
   try {
-    await apiRequest('/logout', { method: 'POST' });
+    await apiRequest('/api/auth/logout', { method: 'POST' });
   } catch (error) {
     if (error instanceof ApiError && [401, 419].includes(error.status)) {
       return;

@@ -1,4 +1,5 @@
 import { LucideIcon } from 'lucide-react';
+import Link from 'next/link';
 import { motion } from 'motion/react';
 
 interface StatCardProps {
@@ -8,6 +9,7 @@ interface StatCardProps {
   trend?: string;
   trendUp?: boolean;
   color?: string;
+  detailHref?: string;
 }
 
 export function StatCard({
@@ -17,6 +19,7 @@ export function StatCard({
   trend,
   trendUp,
   color = 'bg-blue-100 text-blue-600',
+  detailHref,
 }: StatCardProps) {
   return (
     <motion.div
@@ -29,13 +32,17 @@ export function StatCard({
           <p className="text-sm text-gray-600 mb-2">{label}</p>
           <p className="text-3xl font-bold text-gray-900">{value}</p>
           {trend && (
-            <p
-              className={`text-sm mt-2 ${
-                trendUp ? 'text-green-600' : 'text-red-600'
-              }`}
-            >
-              {trendUp ? '↑' : '↓'} {trend}
+            <p className={`text-sm mt-2 ${trendUp ? 'text-green-600' : 'text-red-600'}`}>
+              {trendUp ? 'Naik' : 'Turun'} {trend}
             </p>
+          )}
+          {detailHref && (
+            <Link
+              href={detailHref}
+              className="mt-4 inline-flex text-sm font-semibold text-[#2563EB] transition-colors hover:text-blue-700 hover:underline"
+            >
+              Lihat Detail
+            </Link>
           )}
         </div>
         <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center`}>

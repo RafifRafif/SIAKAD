@@ -1,22 +1,26 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Download, FileText } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { motion } from 'motion/react';
 import { getAuthSession } from '../../lib/authStore';
-import { apiDownload } from '../../lib/apiClient';
+import { apiDownload, apiGet } from '../../lib/apiClient';
 import {
   getGrades,
-  getStudentInsights,
   type StudentGradeItem,
-  type StudentInsights,
 } from '../../lib/academicActivityStore';
+import {
+  tahunAjaranOptionLabel,
+  tahunAjaranOptionValue,
+  type TahunAjaranItem,
+} from '../../lib/tahunAjaranStore';
 
 interface NilaiMapel {
   mapel: string;
   tahunAjaran: string;
   nilai: {
     tugas: number | null;
+    quiz: number | null;
     uts: number | null;
     uas: number | null;
     rata: number;
@@ -29,36 +33,64 @@ const gradeFromAverage = (average: number) =>
 
 export default function NilaiSiswa() {
   const [grades, setGrades] = useState<StudentGradeItem[]>([]);
-  const [insights, setInsights] = useState<StudentInsights>({
-    rank: null,
-    classSize: 0,
-    notes: [],
-    achievements: [],
-  });
+  const [tahunAjaranItems, setTahunAjaranItems] = useState<TahunAjaranItem[]>([]);
+  const [selectedTahunAjaran, setSelectedTahunAjaran] = useState('');
 
   useEffect(() => {
     const loadGrades = async () => {
       const session = await getAuthSession();
       const params = session?.username ? { nis: session.username } : {};
-      const [items, insightItems] = await Promise.all([
+      const [items, academicYears] = await Promise.all([
         getGrades(params),
-        getStudentInsights(params),
+        apiGet<TahunAjaranItem[]>('/api/academic-years'),
       ]);
 
       setGrades(items);
-      setInsights(insightItems);
+      setTahunAjaranItems(academicYears);
     };
 
     void loadGrades().catch(() => {
       setGrades([]);
-      setInsights({ rank: null, classSize: 0, notes: [], achievements: [] });
+      setTahunAjaranItems([]);
     });
   }, []);
+
+  const tahunAjaranOptions = useMemo(
+    () => {
+      const options = tahunAjaranItems
+        .map((item) => ({
+          value: tahunAjaranOptionValue(item),
+          label: tahunAjaranOptionLabel(item),
+        }));
+      const optionValues = new Set(options.map((item) => item.value));
+
+      grades.forEach((grade) => {
+        if (grade.tahunAjaran && !optionValues.has(grade.tahunAjaran)) {
+          options.push({
+            value: grade.tahunAjaran,
+            label: grade.tahunAjaran,
+          });
+          optionValues.add(grade.tahunAjaran);
+        }
+      });
+
+      return options;
+    },
+    [grades, tahunAjaranItems]
+  );
+
+  const filteredGrades = useMemo(
+    () =>
+      selectedTahunAjaran
+        ? grades.filter((grade) => grade.tahunAjaran === selectedTahunAjaran)
+        : [],
+    [grades, selectedTahunAjaran]
+  );
 
   const nilaiData = useMemo<NilaiMapel[]>(() => {
     const grouped = new Map<string, StudentGradeItem[]>();
 
-    grades.forEach((grade) => {
+    filteredGrades.forEach((grade) => {
       const current = grouped.get(grade.mapel) ?? [];
       current.push(grade);
       grouped.set(grade.mapel, current);
@@ -75,6 +107,7 @@ export default function NilaiSiswa() {
         tahunAjaran: items[0]?.tahunAjaran ?? '',
         nilai: {
           tugas: nilaiByJenis('tugas'),
+          quiz: nilaiByJenis('quiz'),
           uts: nilaiByJenis('uts'),
           uas: nilaiByJenis('uas'),
           rata: Number(average.toFixed(2)),
@@ -82,17 +115,14 @@ export default function NilaiSiswa() {
         grade: gradeFromAverage(average),
       };
     });
-  }, [grades]);
+  }, [filteredGrades]);
 
   const rataRataTotal =
     nilaiData.length > 0
       ? nilaiData.reduce((sum, item) => sum + item.nilai.rata, 0) / nilaiData.length
       : 0;
   const gradeTotal = gradeFromAverage(rataRataTotal);
-  const semesterLabel = nilaiData[0]?.tahunAjaran || '-';
-  const rankLabel = insights.rank ? `${insights.rank}/${insights.classSize}` : '-';
-  const latestNote = insights.notes[0];
-  const latestAchievement = insights.achievements[0];
+  const semesterLabel = selectedTahunAjaran || '-';
   const handleDownloadRapor = () => {
     void apiDownload('/api/reports/student/rapor', 'rapor-siswa.pdf');
   };
@@ -117,16 +147,31 @@ export default function NilaiSiswa() {
       <div className="bg-gradient-to-r from-[#2563EB] to-blue-600 rounded-xl p-8 text-white shadow-lg">
         <div className="grid sm:grid-cols-3 gap-6">
           <div>
-            <p className="text-blue-100 mb-2">Semester</p>
-            <p className="text-2xl font-bold">{semesterLabel}</p>
+            <label className="mb-2 block text-blue-100">
+              Tahun Ajaran
+            </label>
+            <select
+              value={selectedTahunAjaran}
+              onChange={(event) => setSelectedTahunAjaran(event.target.value)}
+              className="w-full rounded-lg border border-white/30 bg-white px-4 py-2 text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-white/70"
+            >
+              <option value="" disabled>
+                Pilih Tahun Ajaran
+              </option>
+              {tahunAjaranOptions.map((tahunAjaran) => (
+                <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                  {tahunAjaran.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <p className="text-blue-100 mb-2">Rata-rata Keseluruhan</p>
             <p className="text-2xl font-bold">{rataRataTotal.toFixed(2)}</p>
           </div>
           <div>
-            <p className="text-blue-100 mb-2">Peringkat Kelas</p>
-            <p className="text-2xl font-bold">{rankLabel}</p>
+            <p className="text-blue-100 mb-2">Tahun Ajaran Dipilih</p>
+            <p className="text-2xl font-bold">{semesterLabel}</p>
           </div>
         </div>
       </div>
@@ -150,6 +195,9 @@ export default function NilaiSiswa() {
                   Tugas
                 </th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase">
+                  Quiz
+                </th>
+                <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase">
                   UTS
                 </th>
                 <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase">
@@ -164,6 +212,20 @@ export default function NilaiSiswa() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
+              {!selectedTahunAjaran && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500">
+                    Pilih tahun ajaran terlebih dahulu untuk menampilkan nilai.
+                  </td>
+                </tr>
+              )}
+              {selectedTahunAjaran && nilaiData.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500">
+                    Belum ada data nilai untuk tahun ajaran yang dipilih.
+                  </td>
+                </tr>
+              )}
               {nilaiData.map((item, index) => (
                 <motion.tr
                   key={item.mapel}
@@ -177,6 +239,9 @@ export default function NilaiSiswa() {
                   </td>
                   <td className="px-6 py-4 text-center text-sm text-gray-900">
                     {item.nilai.tugas ?? '-'}
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm text-gray-900">
+                    {item.nilai.quiz ?? '-'}
                   </td>
                   <td className="px-6 py-4 text-center text-sm text-gray-900">
                     {item.nilai.uts ?? '-'}
@@ -207,7 +272,7 @@ export default function NilaiSiswa() {
             </tbody>
             <tfoot className="bg-gray-50 border-t-2 border-gray-300">
               <tr>
-                <td className="px-6 py-4 text-sm font-bold text-gray-900" colSpan={4}>
+                <td className="px-6 py-4 text-sm font-bold text-gray-900" colSpan={5}>
                   RATA-RATA KESELURUHAN
                 </td>
                 <td className="px-6 py-4 text-center text-lg font-bold text-[#2563EB]">
@@ -222,44 +287,6 @@ export default function NilaiSiswa() {
             </tfoot>
           </table>
         </div>
-      </div>
-
-      {/* Additional Info */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <FileText size={24} className="text-[#2563EB]" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Catatan Guru</h3>
-          </div>
-          <p className="text-gray-700 leading-relaxed">
-            {latestNote?.catatan ?? 'Belum ada catatan guru dari backend.'}
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
-        >
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <FileText size={24} className="text-green-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">Prestasi</h3>
-          </div>
-          <p className="text-gray-700">
-            {latestAchievement
-              ? `${latestAchievement.judul}${latestAchievement.keterangan ? ` - ${latestAchievement.keterangan}` : ''}`
-              : 'Belum ada data prestasi dari backend.'}
-          </p>
-        </motion.div>
       </div>
     </div>
   );

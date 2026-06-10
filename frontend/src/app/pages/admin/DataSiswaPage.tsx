@@ -10,14 +10,16 @@ import { type KelasItem } from '../../lib/kelasStore';
 import { defaultSiswaData, type StudentItem as Student } from '../../lib/siswaStore';
 import {
   defaultTahunAjaranData,
+  tahunAjaranOptionLabel,
+  tahunAjaranOptionValue,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
 export default function DataSiswaPage() {
   const [students, setStudents] = useState<Student[]>(defaultSiswaData);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterKelas, setFilterKelas] = useState('all');
-  const [filterTahunAjaran, setFilterTahunAjaran] = useState('all');
+  const [filterKelas, setFilterKelas] = useState('');
+  const [filterTahunAjaran, setFilterTahunAjaran] = useState('');
   const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
     defaultTahunAjaranData
   );
@@ -60,7 +62,11 @@ export default function DataSiswaPage() {
   }, []);
 
   const tahunAjaranList = useMemo(
-    () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
+    () =>
+      tahunAjaranOptions.map((item) => ({
+        value: tahunAjaranOptionValue(item),
+        label: tahunAjaranOptionLabel(item),
+      })),
     [tahunAjaranOptions]
   );
 
@@ -69,9 +75,9 @@ export default function DataSiswaPage() {
     const matchesSearch =
       student.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.nis.includes(searchQuery);
-    const matchesKelas = filterKelas === 'all' || student.kelas === filterKelas;
+    const matchesKelas = filterKelas !== '' && student.kelas === filterKelas;
     const matchesTahunAjaran =
-      filterTahunAjaran === 'all' || student.tahunAjaran === filterTahunAjaran;
+      filterTahunAjaran !== '' && student.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesKelas && matchesTahunAjaran;
   });
 
@@ -191,7 +197,6 @@ export default function DataSiswaPage() {
 
   const kelasList = useMemo(
     () => [
-      'all',
       ...Array.from(
         new Set([
           ...kelasOptions.map((item) => item.nama),
@@ -201,6 +206,10 @@ export default function DataSiswaPage() {
     ],
     [kelasOptions, students]
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterKelas, filterTahunAjaran, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -262,9 +271,12 @@ export default function DataSiswaPage() {
             onChange={(e) => setFilterKelas(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
           >
+            <option value="" disabled>
+              Pilih Kelas
+            </option>
             {kelasList.map((kelas) => (
               <option key={kelas} value={kelas}>
-                {kelas === 'all' ? 'Semua Kelas' : `Kelas ${kelas}`}
+                {kelas}
               </option>
             ))}
           </select>
@@ -274,9 +286,12 @@ export default function DataSiswaPage() {
             onChange={(e) => setFilterTahunAjaran(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
           >
+            <option value="" disabled>
+              Pilih Tahun Ajaran
+            </option>
             {tahunAjaranList.map((tahunAjaran) => (
-              <option key={tahunAjaran} value={tahunAjaran}>
-                {tahunAjaran === 'all' ? 'Semua Tahun Ajaran' : tahunAjaran}
+              <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                {tahunAjaran.label}
               </option>
             ))}
           </select>
@@ -286,7 +301,18 @@ export default function DataSiswaPage() {
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {paginatedStudents.length === 0 ? (
-          <EmptyState message="Tidak ada data siswa" description="Silakan tambahkan siswa baru" />
+          <EmptyState
+            message={
+              filterKelas && filterTahunAjaran
+                ? 'Tidak ada data siswa'
+                : 'Pilih kelas dan tahun ajaran'
+            }
+            description={
+              filterKelas && filterTahunAjaran
+                ? 'Silakan tambahkan siswa baru'
+                : 'Data siswa akan tampil setelah kelas dan tahun ajaran dipilih'
+            }
+          />
         ) : (
           <>
             <div className="overflow-x-auto">
@@ -542,9 +568,9 @@ export default function DataSiswaPage() {
                         <option value="" disabled>
                           Pilih tahun ajaran
                         </option>
-                        {tahunAjaranList.filter((item) => item !== 'all').map((tahunAjaran) => (
-                          <option key={tahunAjaran} value={tahunAjaran}>
-                            {tahunAjaran}
+                        {tahunAjaranList.map((tahunAjaran) => (
+                          <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                            {tahunAjaran.label}
                           </option>
                         ))}
                       </select>
@@ -562,7 +588,7 @@ export default function DataSiswaPage() {
                         <option value="" disabled>
                           Pilih kelas
                         </option>
-                        {kelasList.filter((k) => k !== 'all').map((kelas) => (
+                        {kelasList.map((kelas) => (
                           <option key={kelas} value={kelas}>
                             {kelas}
                           </option>

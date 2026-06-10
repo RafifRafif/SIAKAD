@@ -157,28 +157,6 @@ export default function GuruDashboard() {
           </motion.div>
         )}
       </div>
-
-      {hasGuruMapel && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
-        >
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-lg bg-amber-100 p-3 text-amber-700">
-              <BellRing size={20} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">Tugas Pembelajaran</h3>
-              <p className="text-sm text-gray-600">
-                {tasks[0]?.judul ?? 'Data tugas akan tampil setelah tersedia di backend.'}
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       {!hasWaliKelas && !hasGuruMapel && (
         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
           <GraduationCap size={36} className="mx-auto text-gray-400" />
@@ -186,18 +164,6 @@ export default function GuruDashboard() {
           <p className="mt-2 text-sm text-gray-600">
             Admin perlu memberikan akses Wali Kelas atau Guru Mapel di menu Data Guru.
           </p>
-        </div>
-      )}
-
-      {hasWaliKelas && hasGuruMapel && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-          <div className="flex items-start gap-3">
-            <CalendarDays size={20} className="mt-0.5 text-[#2563EB]" />
-            <p className="text-sm text-blue-900">
-              Akun ini memiliki dua akses aktif. Menu dan dashboard menampilkan fitur wali kelas
-              sekaligus guru mata pelajaran.
-            </p>
-          </div>
         </div>
       )}
     </div>

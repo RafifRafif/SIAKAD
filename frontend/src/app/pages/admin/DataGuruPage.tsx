@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Edit, Trash2, X } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
-import { apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
+import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
 import { defaultGuruData, type GuruItem as Guru } from '../../lib/guruStore';
 import {
   defaultTahunAjaranData,
+  tahunAjaranOptionLabel,
+  tahunAjaranOptionValue,
   type TahunAjaranItem,
 } from '../../lib/tahunAjaranStore';
 
@@ -17,12 +19,14 @@ const roleOptions: Array<'Wali Kelas' | 'Guru Mapel'> = ['Wali Kelas', 'Guru Map
 export default function DataGuruPage() {
   const [guru, setGuru] = useState<Guru[]>(defaultGuruData);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterTahunAjaran, setFilterTahunAjaran] = useState('all');
+  const [filterTahunAjaran, setFilterTahunAjaran] = useState('');
   const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
     defaultTahunAjaranData
   );
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingGuru, setEditingGuru] = useState<Guru | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
@@ -49,7 +53,11 @@ export default function DataGuruPage() {
   }, []);
 
   const tahunAjaranList = useMemo(
-    () => ['all', ...tahunAjaranOptions.map((item) => `${item.nama} ${item.semester}`)],
+    () =>
+      tahunAjaranOptions.map((item) => ({
+        value: tahunAjaranOptionValue(item),
+        label: tahunAjaranOptionLabel(item),
+      })),
     [tahunAjaranOptions]
   );
 
@@ -59,7 +67,7 @@ export default function DataGuruPage() {
       g.nip.includes(searchQuery) ||
       g.role.some((role) => role.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesTahunAjaran =
-      filterTahunAjaran === 'all' || g.tahunAjaran === filterTahunAjaran;
+      filterTahunAjaran !== '' && g.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesTahunAjaran;
   });
 
@@ -68,13 +76,45 @@ export default function DataGuruPage() {
     setFormData({
       nip: '',
       nama: '',
-      tahunAjaran: tahunAjaranList[1] ?? '',
+      tahunAjaran: '',
       role: ['Guru Mapel'],
       email: '',
       telepon: '',
       status: 'Aktif',
     });
     setShowModal(true);
+  };
+
+  const handleImport = () => {
+    setImportFile(null);
+    setShowImportModal(true);
+  };
+
+  const handleImportSubmit = async () => {
+    if (!importFile) {
+      showToast('Silakan pilih file import guru terlebih dahulu!', 'error');
+      return;
+    }
+
+    try {
+      const body = new FormData();
+      body.append('file', importFile);
+
+      const response = await apiUpload<{
+        imported: number;
+        skipped: Array<{ row: number; message: string }>;
+        teachers: Guru[];
+      }>('/api/teachers/import', body);
+
+      setGuru(response.teachers);
+      showToast(
+        `Import selesai: ${response.imported} guru diproses, ${response.skipped.length} baris dilewati.`,
+        'success'
+      );
+      setShowImportModal(false);
+    } catch {
+      showToast('Gagal mengimport data guru.', 'error');
+    }
   };
 
   const handleEdit = (g: Guru) => {
@@ -123,6 +163,11 @@ export default function DataGuruPage() {
       return;
     }
 
+    if (!formData.nip.trim() || !formData.nama.trim() || !formData.tahunAjaran || formData.role.length === 0) {
+      showToast('NIP, nama, tahun ajaran, dan akses guru wajib diisi.', 'error');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -145,8 +190,8 @@ export default function DataGuruPage() {
         showToast('Guru baru berhasil ditambahkan!', 'success');
       }
       setShowModal(false);
-    } catch {
-      showToast('Gagal menyimpan data guru.', 'error');
+    } catch (error) {
+      showToast(getApiErrorMessage(error, 'Gagal menyimpan data guru.'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -168,13 +213,22 @@ export default function DataGuruPage() {
           <h2 className="text-2xl font-bold text-gray-900">Data Guru</h2>
           <p className="text-gray-600 mt-1">Kelola data guru dan akses fitur yang diberikan</p>
         </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 bg-[#2563EB] text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md"
-        >
-          <Plus size={20} />
-          <span>Tambah Guru</span>
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            onClick={handleImport}
+            className="flex items-center justify-center gap-2 rounded-lg border border-green-500 bg-green-500 px-6 py-3 font-medium text-white shadow-sm transition-all hover:bg-green-600"
+          >
+            <Upload size={20} />
+            <span>Import Data Guru</span>
+          </button>
+          <button
+            onClick={handleAdd}
+            className="flex items-center justify-center gap-2 bg-[#2563EB] text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md"
+          >
+            <Plus size={20} />
+            <span>Tambah Guru</span>
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
@@ -197,9 +251,12 @@ export default function DataGuruPage() {
             onChange={(e) => setFilterTahunAjaran(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
           >
+            <option value="" disabled>
+              Pilih Tahun Ajaran
+            </option>
             {tahunAjaranList.map((tahunAjaran) => (
-              <option key={tahunAjaran} value={tahunAjaran}>
-                {tahunAjaran === 'all' ? 'Semua Tahun Ajaran' : tahunAjaran}
+              <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                {tahunAjaran.label}
               </option>
             ))}
           </select>
@@ -208,7 +265,14 @@ export default function DataGuruPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {filteredGuru.length === 0 ? (
-          <EmptyState message="Tidak ada data guru" description="Silakan tambahkan guru baru" />
+          <EmptyState
+            message={filterTahunAjaran ? 'Tidak ada data guru' : 'Pilih tahun ajaran'}
+            description={
+              filterTahunAjaran
+                ? 'Silakan tambahkan guru baru'
+                : 'Data guru akan tampil setelah tahun ajaran dipilih'
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -300,6 +364,79 @@ export default function DataGuruPage() {
       </div>
 
       <AnimatePresence>
+        {showImportModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setShowImportModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-xl rounded-xl bg-white shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+                <h3 className="text-xl font-bold text-gray-900">Import Data Guru</h3>
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-5 p-6">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">
+                    File Excel / CSV
+                  </label>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-medium file:text-[#2563EB] hover:file:bg-blue-100"
+                  />
+                  <p className="mt-2 text-sm text-gray-500">
+                    Header yang didukung: nip, nama, tahunAjaran, role, email, telepon, status.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3">
+                  <p className="text-sm text-gray-600">
+                    {importFile ? `File terpilih: ${importFile.name}` : 'Belum ada file yang dipilih'}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  Untuk lebih dari satu akses, isi kolom role seperti: Guru Mapel|Wali Kelas.
+                </div>
+
+                <div className="flex gap-4 border-t border-gray-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowImportModal(false)}
+                    className="flex-1 rounded-lg border-2 border-gray-300 px-6 py-3 font-medium text-gray-700 transition-all hover:bg-gray-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleImportSubmit}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-6 py-3 font-medium text-white transition-all hover:bg-blue-700"
+                  >
+                    <Upload size={18} />
+                    <span>Import File</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {showModal && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -359,9 +496,12 @@ export default function DataGuruPage() {
                       onChange={(e) => setFormData({ ...formData, tahunAjaran: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
                     >
-                      {tahunAjaranList.filter((item) => item !== 'all').map((tahunAjaran) => (
-                        <option key={tahunAjaran} value={tahunAjaran}>
-                          {tahunAjaran}
+                      <option value="" disabled>
+                        Pilih tahun ajaran
+                      </option>
+                      {tahunAjaranList.map((tahunAjaran) => (
+                        <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                          {tahunAjaran.label}
                         </option>
                       ))}
                     </select>
@@ -462,3 +602,24 @@ const upsertGuru = (items: Guru[], nextItem: Guru) =>
   items.some((item) => item.id === nextItem.id)
     ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
     : [...items, nextItem];
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (! (error instanceof ApiError)) {
+    return fallback;
+  }
+
+  if (
+    typeof error.payload === 'object' &&
+    error.payload !== null &&
+    'errors' in error.payload
+  ) {
+    const errors = (error.payload as { errors?: Record<string, string[]> }).errors;
+    const firstError = errors ? Object.values(errors)[0]?.[0] : null;
+
+    if (firstError) {
+      return firstError;
+    }
+  }
+
+  return error.message || fallback;
+};

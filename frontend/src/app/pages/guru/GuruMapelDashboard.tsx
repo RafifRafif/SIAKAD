@@ -7,38 +7,48 @@ import { motion } from 'motion/react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import {
   emptyDashboardSummary,
+  getGrades,
   getDashboardSummary,
   getLearningTasks,
   getTodaySchedule,
   type DashboardSummary,
   type LearningAssignmentItem,
   type LearningTaskItem,
+  type StudentGradeItem,
 } from '../../lib/academicActivityStore';
 
 export default function GuruMapelDashboard() {
   const [assignments, setAssignments] = useState<LearningAssignmentItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
   const [tasks, setTasks] = useState<LearningTaskItem[]>([]);
+  const [taskGrades, setTaskGrades] = useState<StudentGradeItem[]>([]);
 
   useEffect(() => {
     void Promise.all([
       getTodaySchedule(),
       getDashboardSummary(),
       getLearningTasks(),
+      getGrades({ mine: '1', jenis: 'Tugas' }),
     ])
-      .then(([assignmentItems, dashboardSummary, taskItems]) => {
+      .then(([assignmentItems, dashboardSummary, taskItems, gradeItems]) => {
         setAssignments(assignmentItems);
         setSummary(dashboardSummary);
         setTasks(taskItems);
+        setTaskGrades(gradeItems);
       })
       .catch(() => {
         setAssignments([]);
         setSummary(emptyDashboardSummary);
         setTasks([]);
+        setTaskGrades([]);
       });
   }, []);
 
   const uniqueClasses = new Set(assignments.map((item) => item.kelas)).size;
+  const averageTaskGrade =
+    taskGrades.length > 0
+      ? (taskGrades.reduce((total, item) => total + Number(item.nilai), 0) / taskGrades.length).toFixed(2)
+      : '0.00';
 
   return (
     <div className="space-y-8">
@@ -111,6 +121,50 @@ export default function GuruMapelDashboard() {
           </div>
         </motion.div>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
+      >
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-lg font-semibold text-gray-900">Rekap Nilai Tugas</h3>
+          <span className="text-sm font-medium text-gray-600">Rata-rata: {averageTaskGrade}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px]">
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">NIS</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Nama Siswa</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Kelas</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Mata Pelajaran</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-600">Nilai</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {taskGrades.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-500">
+                    Data nilai tugas akan tampil setelah tersedia di backend.
+                  </td>
+                </tr>
+              ) : (
+                taskGrades.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm text-gray-700">{item.nis}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{item.nama}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{item.kelas}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{item.mapel}</td>
+                    <td className="px-4 py-3 text-center text-sm font-semibold text-gray-900">{item.nilai}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
     </div>
   );
 }

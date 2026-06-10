@@ -20,9 +20,61 @@ export interface BobotPenilaianConfig {
   gradeRanges: GradeRangeItem[];
 }
 
-export const defaultBobotPenilaian: BobotPenilaianItem[] = [];
+export const defaultBobotPenilaian: BobotPenilaianItem[] = [
+  {
+    id: 'quiz',
+    jenisPenilaian: 'Quiz',
+    bobot: 20,
+  },
+  {
+    id: 'tugas',
+    jenisPenilaian: 'Tugas',
+    bobot: 30,
+  },
+  {
+    id: 'uts',
+    jenisPenilaian: 'UTS',
+    bobot: 25,
+  },
+  {
+    id: 'uas',
+    jenisPenilaian: 'UAS',
+    bobot: 25,
+  },
+];
 
-export const defaultGradeRanges: GradeRangeItem[] = [];
+export const defaultGradeRanges: GradeRangeItem[] = [
+  {
+    id: 'grade-a',
+    grade: 'A',
+    nilaiMinimum: 90,
+    nilaiMaksimum: 100,
+  },
+  {
+    id: 'grade-b',
+    grade: 'B',
+    nilaiMinimum: 80,
+    nilaiMaksimum: 89,
+  },
+  {
+    id: 'grade-c',
+    grade: 'C',
+    nilaiMinimum: 70,
+    nilaiMaksimum: 79,
+  },
+  {
+    id: 'grade-d',
+    grade: 'D',
+    nilaiMinimum: 60,
+    nilaiMaksimum: 69,
+  },
+  {
+    id: 'grade-e',
+    grade: 'E',
+    nilaiMinimum: 0,
+    nilaiMaksimum: 59,
+  },
+];
 
 export const defaultBobotPenilaianConfig: BobotPenilaianConfig = {
   bobot: defaultBobotPenilaian,

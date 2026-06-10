@@ -31,8 +31,14 @@ export default function BobotPenilaianPage() {
   useEffect(() => {
     void apiGet<BobotPenilaianConfig>('/api/assessment-setting')
       .then((config) => {
-        setBobotPenilaian(config.bobot);
-        setGradeRanges(config.gradeRanges);
+        setBobotPenilaian(
+          config.bobot.length > 0 ? config.bobot : defaultBobotPenilaianConfig.bobot
+        );
+        setGradeRanges(
+          config.gradeRanges.length > 0
+            ? config.gradeRanges
+            : defaultBobotPenilaianConfig.gradeRanges
+        );
       })
       .catch(() => showToast('Gagal memuat bobot penilaian dari backend.', 'error'));
   }, []);

@@ -51,13 +51,14 @@ const dayFromDate = (value?: string | null) => {
 export default function RekapAbsensiGuruMapel() {
   const [records, setRecords] = useState<AttendanceRecordItem[]>([]);
   const [selectedBulan, setSelectedBulan] = useState('');
+  const [selectedKelas, setSelectedKelas] = useState('');
+  const [selectedMapel, setSelectedMapel] = useState('');
 
   useEffect(() => {
     const loadRecords = async () => {
       const items = await getAttendanceRecords({ mine: '1' });
 
       setRecords(items);
-      setSelectedBulan((current) => current || monthLabelFromDate(items[0]?.tanggal));
     };
 
     void loadRecords()
@@ -68,15 +69,40 @@ export default function RekapAbsensiGuruMapel() {
     () => uniqueValues(records.map((item) => monthLabelFromDate(item.tanggal))),
     [records]
   );
-  const mataPelajaranAktif = useMemo(
-    () => uniqueValues(records.map((item) => item.mapel)).join(', ') || '-',
+
+  const kelasOptions = useMemo(
+    () => uniqueValues(records.map((item) => item.kelas)),
     [records]
   );
 
+  const mapelOptions = useMemo(
+    () =>
+      selectedKelas
+        ? uniqueValues(
+            records
+              .filter((item) => item.kelas === selectedKelas)
+              .map((item) => item.mapel)
+          )
+        : [],
+    [records, selectedKelas]
+  );
+
+  const hasSelectedFilters = Boolean(selectedBulan && selectedKelas && selectedMapel);
+
+  const filteredRecords = useMemo(
+    () =>
+      hasSelectedFilters
+        ? records.filter(
+            (record) =>
+              monthLabelFromDate(record.tanggal) === selectedBulan &&
+              record.kelas === selectedKelas &&
+              record.mapel === selectedMapel
+          )
+        : [],
+    [hasSelectedFilters, records, selectedBulan, selectedKelas, selectedMapel]
+  );
+
   const daftarPresensiSiswa = useMemo(() => {
-    const filteredRecords = records.filter(
-      (record) => !selectedBulan || monthLabelFromDate(record.tanggal) === selectedBulan
-    );
     const grouped = new Map<
       string,
       { id: string; nis: string; nama: string; presensi: Partial<Record<string, StatusHarian>> }
@@ -102,7 +128,7 @@ export default function RekapAbsensiGuruMapel() {
     });
 
     return Array.from(grouped.values());
-  }, [records, selectedBulan]);
+  }, [filteredRecords]);
 
   const statusTerisi = daftarPresensiSiswa.flatMap((item) => Object.values(item.presensi));
   const totalHadir = statusTerisi.filter((status) => status === 'H').length;
@@ -127,33 +153,77 @@ export default function RekapAbsensiGuruMapel() {
         className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
       >
         <div className="border-b border-gray-200 px-6 py-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
             <div>
               <h3 className="font-semibold text-gray-900">Rekap Presensi Murid</h3>
               <p className="mt-1 text-sm text-gray-600">
                 H = Hadir, A = Alpha, S = Sakit, I = Izin, dan - = belum ada data
               </p>
             </div>
-            <span className="inline-flex w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-              {mataPelajaranAktif}
-            </span>
           </div>
 
-          <div className="mt-4 max-w-xs">
-            <label className="mb-2 block text-sm font-medium text-gray-700">
-              Bulan
-            </label>
-            <select
-              value={selectedBulan}
-              onChange={(event) => setSelectedBulan(event.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
-            >
-              {bulanOptions.map((bulan) => (
-                <option key={bulan} value={bulan}>
-                  {bulan}
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Bulan
+              </label>
+              <select
+                value={selectedBulan}
+                onChange={(event) => setSelectedBulan(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+              >
+                <option value="" disabled>
+                  Pilih Bulan
                 </option>
-              ))}
-            </select>
+                {bulanOptions.map((bulan) => (
+                  <option key={bulan} value={bulan}>
+                    {bulan}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Kelas
+              </label>
+              <select
+                value={selectedKelas}
+                onChange={(event) => {
+                  setSelectedKelas(event.target.value);
+                  setSelectedMapel('');
+                }}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+              >
+                <option value="" disabled>
+                  Pilih Kelas
+                </option>
+                {kelasOptions.map((kelas) => (
+                  <option key={kelas} value={kelas}>
+                    {kelas}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">
+                Mata Pelajaran
+              </label>
+              <select
+                value={selectedMapel}
+                onChange={(event) => setSelectedMapel(event.target.value)}
+                disabled={!selectedKelas}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+              >
+                <option value="" disabled>
+                  Pilih Mata Pelajaran
+                </option>
+                {mapelOptions.map((mapel) => (
+                  <option key={mapel} value={mapel}>
+                    {mapel}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -179,6 +249,26 @@ export default function RekapAbsensiGuruMapel() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
+              {!hasSelectedFilters && (
+                <tr>
+                  <td
+                    colSpan={3 + tanggalPresensi.length + 4}
+                    className="px-4 py-8 text-center text-sm text-gray-500"
+                  >
+                    Pilih bulan, kelas, dan mata pelajaran terlebih dahulu untuk menampilkan rekap absensi.
+                  </td>
+                </tr>
+              )}
+              {hasSelectedFilters && daftarPresensiSiswa.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={3 + tanggalPresensi.length + 4}
+                    className="px-4 py-8 text-center text-sm text-gray-500"
+                  >
+                    Belum ada data presensi untuk filter yang dipilih.
+                  </td>
+                </tr>
+              )}
               {daftarPresensiSiswa.map((item, index) => (
                 <tr key={item.id} className="transition-colors hover:bg-gray-50">
                   <td className="px-4 py-4 text-center text-sm text-gray-700">{index + 1}</td>
