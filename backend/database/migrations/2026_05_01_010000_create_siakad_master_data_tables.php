@@ -28,6 +28,9 @@ return new class extends Migration
             $table->string('tahun_ajaran');
             $table->string('kelas');
             $table->string('jenis_kelamin');
+            $table->string('tempat_lahir')->nullable();
+            $table->date('tanggal_lahir')->nullable();
+            $table->text('alamat')->nullable();
             $table->string('email')->nullable();
             $table->string('telepon')->nullable();
             $table->timestamps();

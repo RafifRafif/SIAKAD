@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Edit, Trash2, X, Upload } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Upload, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
@@ -88,6 +89,46 @@ export default function DataGuruPage() {
   const handleImport = () => {
     setImportFile(null);
     setShowImportModal(true);
+  };
+
+  const handleDownloadTemplate = () => {
+    const rows = [
+      {
+        nip: '1234567890',
+        nama: 'Ahmad Fauzi',
+        tahunAjaran: '2026/2027 Ganjil',
+        role: 'Guru Mapel',
+        email: 'ahmad.guru@example.com',
+        telepon: '081234567890',
+        status: 'Aktif',
+      },
+      {
+        nip: '1234567891',
+        nama: 'Siti Aminah',
+        tahunAjaran: '2026/2027 Ganjil',
+        role: 'Guru Mapel, Wali Kelas',
+        email: 'siti.guru@example.com',
+        telepon: '081234567891',
+        status: 'Aktif',
+      },
+    ];
+    const worksheet = XLSX.utils.json_to_sheet(rows, {
+      header: ['nip', 'nama', 'tahunAjaran', 'role', 'email', 'telepon', 'status'],
+    });
+    const workbook = XLSX.utils.book_new();
+
+    worksheet['!cols'] = [
+      { wch: 14 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 24 },
+      { wch: 28 },
+      { wch: 16 },
+      { wch: 12 },
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Guru');
+    XLSX.writeFile(workbook, 'template-import-guru.xlsx');
   };
 
   const handleImportSubmit = async () => {
@@ -392,7 +433,7 @@ export default function DataGuruPage() {
               <div className="space-y-5 p-6">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    File Excel / CSV
+                    File Excel
                   </label>
                   <input
                     type="file"
@@ -401,19 +442,18 @@ export default function DataGuruPage() {
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-medium file:text-[#2563EB] hover:file:bg-blue-100"
                   />
                   <p className="mt-2 text-sm text-gray-500">
-                    Header yang didukung: nip, nama, tahunAjaran, role, email, telepon, status.
+                    Format yang didukung: `.xlsx`, `.xls`, atau `.csv`
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3">
-                  <p className="text-sm text-gray-600">
-                    {importFile ? `File terpilih: ${importFile.name}` : 'Belum ada file yang dipilih'}
-                  </p>
-                </div>
-
-                <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                  Untuk lebih dari satu akses, isi kolom role seperti: Guru Mapel|Wali Kelas.
-                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB] transition-all hover:bg-blue-100"
+                >
+                  <Download size={18} />
+                  <span>Unduh Template Excel</span>
+                </button>
 
                 <div className="flex gap-4 border-t border-gray-200 pt-4">
                   <button

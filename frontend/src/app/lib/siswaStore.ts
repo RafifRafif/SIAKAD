@@ -5,6 +5,9 @@ export interface StudentItem {
   tahunAjaran: string;
   kelas: string;
   jenisKelamin: string;
+  tempatLahir: string | null;
+  tanggalLahir: string | null;
+  alamat: string | null;
   email: string;
   telepon: string;
 }

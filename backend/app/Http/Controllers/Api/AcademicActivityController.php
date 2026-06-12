@@ -13,10 +13,46 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 
 class AcademicActivityController extends Controller
 {
+    public function quranSurahs(): JsonResponse
+    {
+        $surahs = Cache::remember('equran.v2.surahs', now()->addDay(), function (): array {
+            $response = Http::timeout(8)
+                ->acceptJson()
+                ->get('https://equran.id/api/v2/surat');
+
+            if (! $response->successful()) {
+                abort(502, 'Tidak bisa mengambil data surat dari EQuran.id.');
+            }
+
+            $items = $response->json('data');
+
+            if (! is_array($items)) {
+                abort(502, 'Format data surat EQuran.id tidak valid.');
+            }
+
+            return collect($items)
+                ->map(fn (array $item): array => [
+                    'nomor' => (int) ($item['nomor'] ?? 0),
+                    'nama' => (string) ($item['nama'] ?? ''),
+                    'namaLatin' => (string) ($item['namaLatin'] ?? ''),
+                    'jumlahAyat' => (int) ($item['jumlahAyat'] ?? 0),
+                    'tempatTurun' => (string) ($item['tempatTurun'] ?? ''),
+                    'arti' => (string) ($item['arti'] ?? ''),
+                ])
+                ->filter(fn (array $item): bool => $item['nomor'] > 0 && $item['namaLatin'] !== '' && $item['jumlahAyat'] > 0)
+                ->values()
+                ->all();
+        });
+
+        return response()->json($surahs);
+    }
+
     public function grades(Request $request): JsonResponse
     {
         $query = StudentGrade::query()->orderByDesc('tanggal')->orderByDesc('id');

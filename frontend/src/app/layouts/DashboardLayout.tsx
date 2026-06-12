@@ -80,8 +80,8 @@ const getGuruMenuItems = (guruAccess: GuruAccess[]): MenuItem[] => {
       label: 'Wali Kelas',
       children: [
         { label: 'Monitoring Presensi', path: '/guru/monitoring-presensi' },
-        { label: 'Rekap Nilai', path: '/guru/rekap-nilai' },
-        { label: "Setoran Al-Qur'an", path: '/guru/quran' },
+        { label: 'Monitoring Nilai', path: '/guru/rekap-nilai' },
+        { label: "Monitoring Setoran", path: '/guru/riwayat-quran' },
       ],
     });
   }
@@ -94,8 +94,8 @@ const getGuruMenuItems = (guruAccess: GuruAccess[]): MenuItem[] => {
         { label: 'Presensi Kelas', path: '/guru/presensi' },
         { label: 'Rekap Absensi', path: '/guru/rekap-absensi' },
         { label: 'Input Nilai', path: '/guru/nilai' },
-        { label: 'Input Nilai Tugas', path: '/guru/nilai-tugas' },
-        { label: "Rekap Al-Qur'an", path: '/guru/quran' },
+        { label: "Setoran Al-Qur'an", path: '/guru/quran' },
+        { label: 'Riwayat Setoran', path: '/guru/riwayat-quran' },
       ],
     });
   }

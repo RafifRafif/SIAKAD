@@ -16,6 +16,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -251,25 +253,124 @@ class FrontendFeatureApiTest extends TestCase
 
         $file = UploadedFile::fake()->createWithContent(
             'students.csv',
-            "nis,nama,tahunAjaran,kelas,jenisKelamin,email,telepon\n".
-            "SIS100,Siswa Import,2026/2027 Genap,7A,Laki-laki,sis100@example.test,080000000100\n"
+            "nis,nama,tahunAjaran,kelas,jenisKelamin,tempatLahir,tanggalLahir,alamat,email,telepon\n".
+            "SIS100,Siswa Import,2026/2027 Genap,7A,Laki-laki,Bandung,2010-01-15,Jl. Import,sis100@example.test,080000000100\n"
         );
 
         $this->actingAs($admin)
             ->post('/api/students/import', ['file' => $file], ['Accept' => 'application/json'])
             ->assertOk()
             ->assertJsonPath('imported', 1)
+            ->assertJsonPath('importedStudents.0.nis', 'SIS100')
             ->assertJsonPath('students.0.nis', 'SIS100');
 
         $this->assertDatabaseHas('students', [
             'nis' => 'SIS100',
             'nama' => 'Siswa Import',
+            'tempat_lahir' => 'Bandung',
+            'tanggal_lahir' => '2010-01-15',
+            'alamat' => 'Jl. Import',
         ]);
         $this->assertDatabaseHas('users', [
             'username' => 'SIS100',
         ]);
         $this->assertDatabaseHas('school_classes', [
             'nama' => '7A',
+            'jumlah_siswa' => 1,
+        ]);
+    }
+
+    public function test_imported_student_uses_fallback_login_email_when_email_is_already_used(): void
+    {
+        $admin = User::factory()->create([
+            'roles' => [User::ROLE_ADMIN],
+        ]);
+        User::factory()->create([
+            'username' => 'existing_user',
+            'email' => 'duplicate@example.test',
+        ]);
+
+        SchoolClass::query()->create([
+            'nama' => '7C',
+            'tahun_ajaran' => '2026/2027 Genap',
+            'kelompok' => 'Ikhwan',
+            'jumlah_siswa' => 0,
+        ]);
+
+        $file = UploadedFile::fake()->createWithContent(
+            'students.csv',
+            "nis,nama,tahunAjaran,kelas,jenisKelamin,email,telepon\n".
+            "SIS102,Siswa Duplikat Email,2026/2027 Genap,7C,Laki-laki,duplicate@example.test,080000000102\n"
+        );
+
+        $this->actingAs($admin)
+            ->post('/api/students/import', ['file' => $file], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('imported', 1)
+            ->assertJsonPath('importedStudents.0.nis', 'SIS102');
+
+        $this->assertDatabaseHas('students', [
+            'nis' => 'SIS102',
+            'email' => 'duplicate@example.test',
+        ]);
+        $this->assertDatabaseHas('users', [
+            'username' => 'SIS102',
+            'email' => 'sis102@siakad.local',
+        ]);
+    }
+
+    public function test_admin_can_import_students_from_xlsx(): void
+    {
+        $admin = User::factory()->create([
+            'roles' => [User::ROLE_ADMIN],
+        ]);
+
+        SchoolClass::query()->create([
+            'nama' => '7B',
+            'tahun_ajaran' => '2026/2027 Genap',
+            'kelompok' => 'Akhwat',
+            'jumlah_siswa' => 0,
+        ]);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->fromArray([
+            ['nis', 'nama', 'tahunAjaran', 'kelas', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'alamat', 'email', 'telepon'],
+            ['SIS101', 'Siswa Excel', '2026/2027 Genap', '7B', 'Perempuan', 'Jakarta', '2011-02-16', 'Jl. Excel', 'sis101@example.test', '080000000101'],
+        ]);
+
+        $path = tempnam(sys_get_temp_dir(), 'students-import-').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+
+        try {
+            $file = new UploadedFile(
+                $path,
+                'students.xlsx',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                null,
+                true,
+            );
+
+            $this->actingAs($admin)
+                ->post('/api/students/import', ['file' => $file], ['Accept' => 'application/json'])
+                ->assertOk()
+                ->assertJsonPath('imported', 1)
+                ->assertJsonPath('students.0.nis', 'SIS101');
+        } finally {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+
+        $this->assertDatabaseHas('students', [
+            'nis' => 'SIS101',
+            'nama' => 'Siswa Excel',
+            'tempat_lahir' => 'Jakarta',
+            'tanggal_lahir' => '2011-02-16',
+            'alamat' => 'Jl. Excel',
+        ]);
+        $this->assertDatabaseHas('school_classes', [
+            'nama' => '7B',
             'jumlah_siswa' => 1,
         ]);
     }

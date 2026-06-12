@@ -136,9 +136,15 @@ class MasterDataController extends Controller
     {
         $previousClass = $student->kelas;
 
-        User::query()->where('username', $student->nis)->delete();
-        $student->delete();
-        $this->refreshSchoolClassStudentCount($previousClass);
+        DB::transaction(function () use ($student, $previousClass): void {
+            User::query()
+                ->where('username', $student->nis)
+                ->whereJsonContains('roles', User::ROLE_SISWA)
+                ->delete();
+
+            $student->delete();
+            $this->refreshSchoolClassStudentCount($previousClass);
+        });
 
         return response()->json(['message' => 'Siswa berhasil dihapus.']);
     }
@@ -479,6 +485,9 @@ class MasterDataController extends Controller
             'tahunAjaran' => ['required', 'string', 'max:255'],
             'kelas' => ['required', 'string', 'max:255'],
             'jenisKelamin' => ['required', 'string', 'max:255'],
+            'tempatLahir' => ['nullable', 'string', 'max:255'],
+            'tanggalLahir' => ['nullable', 'date'],
+            'alamat' => ['nullable', 'string'],
             'email' => [
                 'nullable',
                 'email',
@@ -499,6 +508,9 @@ class MasterDataController extends Controller
             'tahun_ajaran' => trim($data['tahunAjaran']),
             'kelas' => trim($data['kelas']),
             'jenis_kelamin' => $data['jenisKelamin'],
+            'tempat_lahir' => isset($data['tempatLahir']) ? trim($data['tempatLahir']) : null,
+            'tanggal_lahir' => $data['tanggalLahir'] ?? null,
+            'alamat' => isset($data['alamat']) ? trim($data['alamat']) : null,
             'email' => isset($data['email']) ? trim($data['email']) : null,
             'telepon' => isset($data['telepon']) ? trim($data['telepon']) : null,
         ];

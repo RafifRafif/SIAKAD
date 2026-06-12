@@ -26,8 +26,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Concerns\WithFormatData;
+use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use Symfony\Component\HttpFoundation\Response;
-use ZipArchive;
 
 class FrontendFeatureController extends Controller
 {
@@ -171,6 +173,7 @@ class FrontendFeatureController extends Controller
         $file = $data['file'];
         $rows = $this->rowsFromUploadedFile($file);
         $imported = 0;
+        $importedStudents = [];
         $skipped = [];
 
         foreach ($rows as $index => $row) {
@@ -194,6 +197,9 @@ class FrontendFeatureController extends Controller
                     'tahun_ajaran' => $tahunAjaran,
                     'kelas' => $kelas,
                     'jenis_kelamin' => $row['jenisKelamin'] ?: 'Laki-laki',
+                    'tempat_lahir' => $row['tempatLahir'] ?: null,
+                    'tanggal_lahir' => $row['tanggalLahir'] ?: null,
+                    'alamat' => $row['alamat'] ?: null,
                     'email' => $row['email'] ?: null,
                     'telepon' => $row['telepon'] ?: null,
                 ],
@@ -201,6 +207,7 @@ class FrontendFeatureController extends Controller
 
             $this->syncImportedStudentUser($student);
             $this->refreshSchoolClassStudentCount($kelas);
+            $importedStudents[] = $student->fresh()->toFrontend();
             $imported++;
         }
 
@@ -208,6 +215,7 @@ class FrontendFeatureController extends Controller
             'message' => 'Import data siswa selesai.',
             'imported' => $imported,
             'skipped' => $skipped,
+            'importedStudents' => $importedStudents,
             'students' => Student::query()->orderBy('id')->get()->map->toFrontend()->values(),
         ]);
     }
@@ -555,11 +563,17 @@ class FrontendFeatureController extends Controller
      */
     private function rowsFromUploadedFile(UploadedFile $file): array
     {
-        $extension = strtolower($file->getClientOriginalExtension());
+        try {
+            $sheets = Excel::toArray(new class implements WithFormatData
+            {
+            }, $file);
+        } catch (\Throwable) {
+            throw ValidationException::withMessages([
+                'file' => 'File import tidak dapat dibaca. Pastikan format file adalah XLSX, XLS, atau CSV yang valid.',
+            ]);
+        }
 
-        $rows = $extension === 'xlsx'
-            ? $this->rowsFromXlsx($file)
-            : $this->rowsFromDelimitedFile($file);
+        $rows = $sheets[0] ?? [];
 
         if (count($rows) < 2) {
             throw ValidationException::withMessages([
@@ -578,6 +592,9 @@ class FrontendFeatureController extends Controller
                 'tahunAjaran' => '',
                 'kelas' => '',
                 'jenisKelamin' => '',
+                'tempatLahir' => '',
+                'tanggalLahir' => '',
+                'alamat' => '',
                 'role' => '',
                 'email' => '',
                 'telepon' => '',
@@ -588,9 +605,11 @@ class FrontendFeatureController extends Controller
                 $field = $this->fieldFromHeader($headers[$index] ?? '');
 
                 if ($field !== null) {
-                    $mapped[$field] = trim((string) $value);
+                    $mapped[$field] = $this->normalizeImportedCell($value);
                 }
             }
+
+            $mapped['tanggalLahir'] = $this->normalizeImportedDate($mapped['tanggalLahir']);
 
             if (implode('', $mapped) !== '') {
                 $dataRows[] = $mapped;
@@ -600,118 +619,51 @@ class FrontendFeatureController extends Controller
         return $dataRows;
     }
 
-    /**
-     * @return list<list<string>>
-     */
-    private function rowsFromDelimitedFile(UploadedFile $file): array
+    private function normalizeImportedCell(mixed $value): string
     {
-        $content = (string) file_get_contents($file->getRealPath());
-        $firstLine = strtok($content, "\r\n") ?: '';
-        $delimiter = substr_count($firstLine, ';') > substr_count($firstLine, ',') ? ';' : ',';
-        $rows = [];
-
-        foreach (preg_split('/\r\n|\r|\n/', $content) ?: [] as $line) {
-            if (trim($line) === '') {
-                continue;
-            }
-
-            $rows[] = str_getcsv($line, $delimiter);
+        if ($value === null) {
+            return '';
         }
 
-        return $rows;
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        return trim((string) $value);
     }
 
-    /**
-     * @return list<list<string>>
-     */
-    private function rowsFromXlsx(UploadedFile $file): array
+    private function normalizeImportedDate(string $value): string
     {
-        if (! class_exists(ZipArchive::class)) {
-            throw ValidationException::withMessages([
-                'file' => 'Server belum mendukung pembacaan file XLSX.',
-            ]);
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
         }
 
-        $zip = new ZipArchive();
-
-        if ($zip->open($file->getRealPath()) !== true) {
-            throw ValidationException::withMessages([
-                'file' => 'File XLSX tidak dapat dibaca.',
-            ]);
-        }
-
-        $sharedStrings = [];
-        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
-
-        if ($sharedXml !== false) {
-            $shared = simplexml_load_string($sharedXml);
-
-            if ($shared !== false) {
-                foreach ($shared->si as $item) {
-                    $sharedStrings[] = (string) ($item->t ?? $item->r->t ?? '');
-                }
+        if (is_numeric($value)) {
+            try {
+                return ExcelDate::excelToDateTimeObject((float) $value)->format('Y-m-d');
+            } catch (\Throwable) {
+                return $value;
             }
         }
 
-        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
-        $zip->close();
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y'] as $format) {
+            try {
+                $date = Carbon::createFromFormat($format, $value);
 
-        if ($sheetXml === false) {
-            throw ValidationException::withMessages([
-                'file' => 'Sheet pertama tidak ditemukan.',
-            ]);
-        }
-
-        $sheet = simplexml_load_string($sheetXml);
-
-        if ($sheet === false) {
-            throw ValidationException::withMessages([
-                'file' => 'Sheet pertama tidak dapat dibaca.',
-            ]);
-        }
-
-        $sheet->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-        $rowNodes = $sheet->xpath('//m:sheetData/m:row') ?: [];
-        $rows = [];
-
-        foreach ($rowNodes as $rowNode) {
-            $row = [];
-            $cells = $rowNode->xpath('m:c') ?: [];
-
-            foreach ($cells as $cell) {
-                $attributes = $cell->attributes();
-                $cellRef = (string) ($attributes['r'] ?? '');
-                $columnIndex = $this->xlsxColumnIndex($cellRef);
-                $type = (string) ($attributes['t'] ?? '');
-                $value = (string) ($cell->v ?? '');
-
-                if ($type === 's' && isset($sharedStrings[(int) $value])) {
-                    $value = $sharedStrings[(int) $value];
-                } elseif ($type === 'inlineStr') {
-                    $inline = $cell->xpath('m:is/m:t');
-                    $value = isset($inline[0]) ? (string) $inline[0] : $value;
+                if ($date !== false) {
+                    return $date->format('Y-m-d');
                 }
-
-                $row[$columnIndex] = $value;
+            } catch (\Throwable) {
             }
-
-            ksort($row);
-            $rows[] = array_values($row);
         }
 
-        return $rows;
-    }
-
-    private function xlsxColumnIndex(string $cellRef): int
-    {
-        $letters = preg_replace('/[^A-Z]/', '', strtoupper($cellRef)) ?: 'A';
-        $index = 0;
-
-        foreach (str_split($letters) as $letter) {
-            $index = ($index * 26) + (ord($letter) - 64);
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Throwable) {
+            return $value;
         }
-
-        return max(0, $index - 1);
     }
 
     private function normalizeHeader(string $header): string
@@ -728,6 +680,9 @@ class FrontendFeatureController extends Controller
             'tahunajaran', 'tahun' => 'tahunAjaran',
             'kelas', 'class' => 'kelas',
             'jeniskelamin', 'jk', 'gender' => 'jenisKelamin',
+            'tempatlahir', 'tempat' => 'tempatLahir',
+            'tanggallahir', 'tgllahir', 'ttl' => 'tanggalLahir',
+            'alamat', 'address' => 'alamat',
             'role', 'roles', 'akses', 'aksesguru' => 'role',
             'email', 'emailaddress', 'surel' => 'email',
             'telepon', 'telp', 'nohp', 'hp', 'phone' => 'telepon',
@@ -741,7 +696,7 @@ class FrontendFeatureController extends Controller
         $user = User::query()->firstOrNew(['username' => $student->nis]);
         $user->fill([
             'name' => $student->nama,
-            'email' => $student->email ?: $student->nis.'@siakad.local',
+            'email' => $this->uniqueImportedUserEmail($student->email, $student->nis, $user->id),
             'roles' => [User::ROLE_SISWA],
             'email_verified_at' => now(),
         ]);
@@ -790,7 +745,7 @@ class FrontendFeatureController extends Controller
         $user = User::query()->firstOrNew(['username' => $teacher->nip]);
         $user->fill([
             'name' => $teacher->nama,
-            'email' => $teacher->email ?: strtolower($teacher->nip).'@siakad.local',
+            'email' => $this->uniqueImportedUserEmail($teacher->email, $teacher->nip, $user->id),
             'roles' => $roles,
             'email_verified_at' => now(),
         ]);
@@ -800,6 +755,40 @@ class FrontendFeatureController extends Controller
         }
 
         $user->save();
+    }
+
+    private function uniqueImportedUserEmail(?string $email, string $username, ?int $currentUserId): string
+    {
+        $candidate = trim((string) $email);
+
+        if ($candidate !== '' && ! $this->emailUsedByAnotherUser($candidate, $currentUserId)) {
+            return $candidate;
+        }
+
+        $localPart = preg_replace('/[^a-z0-9._-]/', '', strtolower($username)) ?: 'user';
+        $fallback = $localPart.'@siakad.local';
+
+        if (! $this->emailUsedByAnotherUser($fallback, $currentUserId)) {
+            return $fallback;
+        }
+
+        for ($index = 1; $index < 1000; $index++) {
+            $fallback = $localPart.'-'.$index.'@siakad.local';
+
+            if (! $this->emailUsedByAnotherUser($fallback, $currentUserId)) {
+                return $fallback;
+            }
+        }
+
+        return uniqid($localPart.'-', true).'@siakad.local';
+    }
+
+    private function emailUsedByAnotherUser(string $email, ?int $currentUserId): bool
+    {
+        return User::query()
+            ->where('email', $email)
+            ->when($currentUserId, fn ($query) => $query->where('id', '!=', $currentUserId))
+            ->exists();
     }
 
     private function refreshSchoolClassStudentCount(string $className): void

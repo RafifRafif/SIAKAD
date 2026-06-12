@@ -23,10 +23,10 @@ export function Footer() {
             </p>
             {/* Social Media */}
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-[#2563EB] transition-colors">
+              <a href="https://www.facebook.com/smaitulilalbabbatam" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-[#2563EB] transition-colors">
                 <Facebook size={20} />
               </a>
-              <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-[#2563EB] transition-colors">
+              <a href="https://www.instagram.com/smait.ulilalbabbatam/" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-[#2563EB] transition-colors">
                 <Instagram size={20} />
               </a>
               <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-[#2563EB] transition-colors">

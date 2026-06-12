@@ -9,10 +9,23 @@ import type { QuranSubmissionItem } from '../../lib/academicActivityStore';
 import type { StudentItem } from '../../lib/siswaStore';
 
 const getCurrentDate = () => new Date().toISOString().split('T')[0];
+const QURAN_TOTAL_AYAT = 6236;
+const QURAN_SURAHS_CACHE_KEY = 'siakad_quran_surahs_cache_v1';
+const QURAN_SURAHS_CACHE_DURATION = 24 * 60 * 60 * 1000;
+
+interface QuranSurah {
+  nomor: number;
+  nama: string;
+  namaLatin: string;
+  jumlahAyat: number;
+  tempatTurun: string;
+  arti: string;
+}
 
 export default function SetoranQuran() {
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [submissions, setSubmissions] = useState<QuranSubmissionItem[]>([]);
+  const [surahs, setSurahs] = useState<QuranSurah[]>([]);
   const [selectedSiswa, setSelectedSiswa] = useState<number | null>(null);
   const tanggal = getCurrentDate();
   const [surah, setSurah] = useState('');
@@ -23,6 +36,25 @@ export default function SetoranQuran() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
+
+  useEffect(() => {
+    const cachedSurahs = readCachedSurahs();
+
+    if (cachedSurahs.length > 0) {
+      setSurahs(cachedSurahs);
+    }
+
+    void apiGet<QuranSurah[]>('/api/quran/surahs')
+      .then((items) => {
+        setSurahs(items);
+        writeCachedSurahs(items);
+      })
+      .catch(() => {
+        if (cachedSurahs.length === 0) {
+          showToast('Gagal memuat daftar surah dari backend.', 'error');
+        }
+      });
+  }, []);
 
   useEffect(() => {
     void apiGet<StudentItem[]>('/api/students')
@@ -44,6 +76,11 @@ export default function SetoranQuran() {
     );
   }, []);
 
+  const completedAyatByNis = useMemo(
+    () => countCompletedAyatByNis(submissions, surahs),
+    [submissions, surahs]
+  );
+
   const progressByNis = useMemo(
     () =>
       submissions.reduce<Record<string, number>>((accumulator, item) => {
@@ -58,8 +95,14 @@ export default function SetoranQuran() {
       students.map((student) => ({
         ...student,
         progress: progressByNis[student.nis] ?? 0,
+        completedAyat: completedAyatByNis[student.nis] ?? 0,
       })),
-    [students, progressByNis]
+    [completedAyatByNis, students, progressByNis]
+  );
+
+  const selectedSurah = useMemo(
+    () => surahs.find((item) => item.namaLatin === surah) ?? null,
+    [surah, surahs]
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,20 +118,52 @@ export default function SetoranQuran() {
       return;
     }
 
+    if (surahs.length === 0) {
+      showToast('Daftar surah belum tersedia. Coba muat ulang halaman.', 'error');
+      return;
+    }
+
+    if (selectedSurah === null) {
+      showToast('Pilih surah dari daftar terlebih dahulu.', 'error');
+      return;
+    }
+
+    const ayatMulaiNumber = Number(ayatMulai);
+    const ayatSelesaiNumber = Number(ayatSelesai);
+
+    if (ayatSelesaiNumber > selectedSurah.jumlahAyat) {
+      showToast(`${selectedSurah.namaLatin} memiliki ${selectedSurah.jumlahAyat} ayat.`, 'error');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
+      const nextCompletedAyat = countCompletedAyatForStudent(
+        submissions,
+        surahs,
+        selectedStudent.nis,
+        {
+          surah: selectedSurah.namaLatin,
+          ayatMulai: ayatMulaiNumber,
+          ayatSelesai: ayatSelesaiNumber,
+        }
+      );
+      const estimatedProgressJuz = Math.min(
+        30,
+        Math.ceil((nextCompletedAyat / QURAN_TOTAL_AYAT) * 30)
+      );
       const savedSubmission = await apiPost<QuranSubmissionItem>('/api/quran-submissions', {
         nis: selectedStudent.nis,
         nama: selectedStudent.nama,
         kelas: selectedStudent.kelas,
         tanggal,
-        surah: surah.trim(),
-        ayatMulai: Number(ayatMulai),
-        ayatSelesai: Number(ayatSelesai),
+        surah: selectedSurah.namaLatin,
+        ayatMulai: ayatMulaiNumber,
+        ayatSelesai: ayatSelesaiNumber,
         penilaian: nilai,
         keterangan: keterangan.trim() || null,
-        progress: selectedStudent.progress,
+        progress: estimatedProgressJuz,
       });
 
       setSubmissions((current) => upsertQuranSubmission(current, savedSubmission));
@@ -105,7 +180,7 @@ export default function SetoranQuran() {
   };
 
   const selectedStudent = siswaData.find((s) => s.id === selectedSiswa);
-  const progressPercent = ((selectedStudent?.progress || 0) / 30) * 100;
+  const progressPercent = ((selectedStudent?.completedAyat || 0) / QURAN_TOTAL_AYAT) * 100;
   const filteredSiswa = siswaData.filter(
     (siswa) =>
       siswa.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -164,13 +239,13 @@ export default function SetoranQuran() {
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">Progress Hafalan</span>
                     <span className="font-medium text-[#2563EB]">
-                      {siswa.progress} Juz
+                      {siswa.completedAyat} ayat
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-[#2563EB] h-2 rounded-full transition-all"
-                      style={{ width: `${(siswa.progress / 30) * 100}%` }}
+                      style={{ width: `${(siswa.completedAyat / QURAN_TOTAL_AYAT) * 100}%` }}
                     />
                   </div>
                 </div>
@@ -194,7 +269,7 @@ export default function SetoranQuran() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-green-700">Progress Hafalan</span>
                 <span className="font-bold text-green-900">
-                  {selectedStudent?.progress ?? 0} / 30 Juz ({progressPercent.toFixed(0)}%)
+                  {selectedStudent?.completedAyat ?? 0} / 6.236 ayat ({progressPercent.toFixed(1)}%)
                 </span>
               </div>
               <div className="w-full bg-green-200 rounded-full h-3 mt-2">
@@ -226,14 +301,21 @@ export default function SetoranQuran() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Surah
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={surah}
                     onChange={(e) => setSurah(e.target.value)}
-                    placeholder="Nama surah"
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
-                  />
+                  >
+                    <option value="" disabled>
+                      Pilih surah
+                    </option>
+                    {surahs.map((item) => (
+                      <option key={item.nomor} value={item.namaLatin}>
+                        {item.nomor}. {item.namaLatin} ({item.jumlahAyat} ayat)
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -244,6 +326,8 @@ export default function SetoranQuran() {
                   </label>
                   <input
                     type="number"
+                    min={1}
+                    max={selectedSurah?.jumlahAyat}
                     value={ayatMulai}
                     onChange={(e) => setAyatMulai(e.target.value)}
                     placeholder="1"
@@ -257,6 +341,8 @@ export default function SetoranQuran() {
                   </label>
                   <input
                     type="number"
+                    min={1}
+                    max={selectedSurah?.jumlahAyat}
                     value={ayatSelesai}
                     onChange={(e) => setAyatSelesai(e.target.value)}
                     placeholder="10"
@@ -310,7 +396,7 @@ export default function SetoranQuran() {
                 className="w-full flex items-center justify-center gap-2 bg-[#2563EB] text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md"
               >
                 <Save size={20} />
-                <span>Simpan Setoran</span>
+              <span>Simpan Setoran</span>
               </button>
             </form>
           </div>
@@ -327,3 +413,104 @@ const upsertQuranSubmission = (
   items.some((item) => item.id === nextItem.id)
     ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
     : [nextItem, ...items];
+
+const readCachedSurahs = (): QuranSurah[] => {
+  try {
+    const rawCache = window.localStorage.getItem(QURAN_SURAHS_CACHE_KEY);
+
+    if (!rawCache) {
+      return [];
+    }
+
+    const cache = JSON.parse(rawCache) as {
+      expiresAt?: number;
+      items?: QuranSurah[];
+    };
+
+    if (!cache.expiresAt || cache.expiresAt < Date.now() || !Array.isArray(cache.items)) {
+      return [];
+    }
+
+    return cache.items;
+  } catch {
+    return [];
+  }
+};
+
+const writeCachedSurahs = (items: QuranSurah[]) => {
+  try {
+    window.localStorage.setItem(
+      QURAN_SURAHS_CACHE_KEY,
+      JSON.stringify({
+        expiresAt: Date.now() + QURAN_SURAHS_CACHE_DURATION,
+        items,
+      })
+    );
+  } catch {
+  }
+};
+
+const normalizeSurahName = (value?: string | null) =>
+  (value ?? '').trim().toLowerCase();
+
+const countCompletedAyatByNis = (
+  submissions: QuranSubmissionItem[],
+  surahs: QuranSurah[]
+) => {
+  const completedByNis: Record<string, Set<string>> = {};
+
+  for (const submission of submissions) {
+    addSubmissionAyats(completedByNis, surahs, submission);
+  }
+
+  return Object.fromEntries(
+    Object.entries(completedByNis).map(([nis, ayats]) => [nis, ayats.size])
+  );
+};
+
+const countCompletedAyatForStudent = (
+  submissions: QuranSubmissionItem[],
+  surahs: QuranSurah[],
+  nis: string,
+  nextSubmission: Pick<QuranSubmissionItem, 'surah' | 'ayatMulai' | 'ayatSelesai'>
+) => {
+  const completedByNis: Record<string, Set<string>> = {};
+
+  for (const submission of submissions.filter((item) => item.nis === nis)) {
+    addSubmissionAyats(completedByNis, surahs, submission);
+  }
+
+  addSubmissionAyats(completedByNis, surahs, {
+    ...nextSubmission,
+    nis,
+  });
+
+  return completedByNis[nis]?.size ?? 0;
+};
+
+const addSubmissionAyats = (
+  completedByNis: Record<string, Set<string>>,
+  surahs: QuranSurah[],
+  submission: Pick<QuranSubmissionItem, 'nis' | 'surah' | 'ayatMulai' | 'ayatSelesai'>
+) => {
+  const surah = surahs.find(
+    (item) => normalizeSurahName(item.namaLatin) === normalizeSurahName(submission.surah)
+  );
+
+  if (!surah) {
+    return;
+  }
+
+  const start = Math.max(1, submission.ayatMulai);
+  const end = Math.min(surah.jumlahAyat, submission.ayatSelesai);
+
+  if (end < start) {
+    return;
+  }
+
+  completedByNis[submission.nis] ??= new Set<string>();
+
+  for (let ayat = start; ayat <= end; ayat++) {
+    completedByNis[submission.nis].add(`${surah.nomor}:${ayat}`);
+  }
+};

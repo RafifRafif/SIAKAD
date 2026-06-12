@@ -9,6 +9,8 @@ use App\Models\QuranSubmission;
 use App\Models\Teacher;
 use App\Models\StudentGrade;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AcademicActivityApiTest extends TestCase
@@ -137,6 +139,45 @@ class AcademicActivityApiTest extends TestCase
         $this->assertDatabaseMissing('attendance_records', ['id' => $attendanceId]);
         $this->assertDatabaseMissing('attendance_records', ['id' => $aprilAttendanceId]);
         $this->assertDatabaseMissing('quran_submissions', ['id' => $quranId]);
+    }
+
+    public function test_quran_surahs_are_loaded_from_equran_and_cached(): void
+    {
+        Cache::forget('equran.v2.surahs');
+
+        Http::fake([
+            'https://equran.id/api/v2/surat' => Http::response([
+                'code' => 200,
+                'message' => 'OK',
+                'data' => [
+                    [
+                        'nomor' => 1,
+                        'nama' => 'الفاتحة',
+                        'namaLatin' => 'Al-Fatihah',
+                        'jumlahAyat' => 7,
+                        'tempatTurun' => 'Mekah',
+                        'arti' => 'Pembukaan',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $user = User::factory()->create([
+            'roles' => [User::ROLE_GURU_MAPEL],
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/quran/surahs')
+            ->assertOk()
+            ->assertJsonPath('0.nomor', 1)
+            ->assertJsonPath('0.namaLatin', 'Al-Fatihah')
+            ->assertJsonPath('0.jumlahAyat', 7);
+
+        $this->actingAs($user)
+            ->getJson('/api/quran/surahs')
+            ->assertOk();
+
+        Http::assertSentCount(1);
     }
 
     public function test_creating_same_grade_twice_updates_existing_record(): void

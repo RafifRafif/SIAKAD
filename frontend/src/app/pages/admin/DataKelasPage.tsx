@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Edit, Trash2, X, Users } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Users, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
@@ -29,6 +29,7 @@ export default function DataKelasPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
+  const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
 
@@ -90,6 +91,20 @@ export default function DataKelasPage() {
       filterTahunAjaran !== '' && item.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesTahunAjaran;
   });
+
+  const selectedKelasStudents = useMemo(() => {
+    if (selectedKelas === null) {
+      return [];
+    }
+
+    return students
+      .filter(
+        (student) =>
+          student.kelas === selectedKelas.nama &&
+          student.tahunAjaran === selectedKelas.tahunAjaran
+      )
+      .sort((first, second) => first.nama.localeCompare(second.nama));
+  }, [selectedKelas, students]);
 
   const handleAdd = () => {
     if (tahunAjaranList.length === 0) {
@@ -277,6 +292,13 @@ export default function DataKelasPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => setSelectedKelas(item)}
+                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                          title="Lihat Siswa"
+                        >
+                          <Eye size={18} />
+                        </button>
+                        <button
                           onClick={() => handleEdit(item)}
                           className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
                         >
@@ -299,6 +321,87 @@ export default function DataKelasPage() {
       </div>
 
       <AnimatePresence>
+        {selectedKelas && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setSelectedKelas(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-3xl rounded-xl bg-white shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b px-6 py-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    Siswa Kelas {selectedKelas.nama}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {selectedKelas.tahunAjaran} - {selectedKelasStudents.length} siswa
+                  </p>
+                </div>
+                <button onClick={() => setSelectedKelas(null)}>
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {selectedKelasStudents.length === 0 ? (
+                  <EmptyState
+                    message="Belum ada siswa"
+                    description="Tidak ada siswa yang terdaftar pada kelas ini"
+                  />
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full">
+                      <thead className="border-b border-gray-200 bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">
+                            NIS
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">
+                            Nama Siswa
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">
+                            Jenis Kelamin
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">
+                            Kontak
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {selectedKelasStudents.map((student) => (
+                          <tr key={student.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                              {student.nis}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {student.nama}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              {student.jenisKelamin}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-700">
+                              <div>{student.email || '-'}</div>
+                              <div className="text-xs text-gray-500">{student.telepon || '-'}</div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {showModal && (
           <motion.div
             initial={{ opacity: 0 }}

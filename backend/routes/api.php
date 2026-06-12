@@ -84,6 +84,7 @@ Route::middleware('jwt')->group(function () use ($adminOnly, $adminOrGuru, $allA
     Route::post('/quran-submissions', [AcademicActivityController::class, 'storeQuranSubmission'])->middleware($adminOrGuru);
     Route::put('/quran-submissions/{quranSubmission}', [AcademicActivityController::class, 'updateQuranSubmission'])->middleware($adminOrGuru);
     Route::delete('/quran-submissions/{quranSubmission}', [AcademicActivityController::class, 'deleteQuranSubmission'])->middleware($adminOrGuru);
+    Route::get('/quran/surahs', [AcademicActivityController::class, 'quranSurahs'])->middleware($allAppRoles);
 
     Route::get('/dashboard-summary', [AcademicActivityController::class, 'dashboardSummary'])->middleware($allAppRoles);
     Route::get('/report-options', [FrontendFeatureController::class, 'reportOptions'])->middleware($adminOnly);

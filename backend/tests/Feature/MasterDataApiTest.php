@@ -36,6 +36,9 @@ class MasterDataApiTest extends TestCase
             'tahun_ajaran' => 'Tahun Test',
             'kelas' => 'Kelas Test',
             'jenis_kelamin' => 'Laki-laki',
+            'tempat_lahir' => 'Bandung',
+            'tanggal_lahir' => '2010-01-15',
+            'alamat' => 'Jl. Siswa Test',
             'email' => 'siswa.test@example.test',
             'telepon' => '080000000001',
         ]);
@@ -56,6 +59,9 @@ class MasterDataApiTest extends TestCase
             ->assertJsonFragment([
                 'nis' => 'SIS001',
                 'nama' => 'Siswa Test',
+                'tempatLahir' => 'Bandung',
+                'tanggalLahir' => '2010-01-15',
+                'alamat' => 'Jl. Siswa Test',
             ]);
 
         $this->actingAs($admin)
@@ -151,6 +157,9 @@ class MasterDataApiTest extends TestCase
             'tahunAjaran' => 'Tahun Test',
             'kelas' => 'Kelas Lama',
             'jenisKelamin' => 'Laki-laki',
+            'tempatLahir' => 'Bandung',
+            'tanggalLahir' => '2010-01-15',
+            'alamat' => 'Jl. Lama',
             'email' => 'siswa.lama@example.test',
             'telepon' => '080000000001',
         ]);
@@ -193,11 +202,17 @@ class MasterDataApiTest extends TestCase
                 'tahunAjaran' => 'Tahun Test',
                 'kelas' => 'Kelas Baru',
                 'jenisKelamin' => 'Laki-laki',
+                'tempatLahir' => 'Jakarta',
+                'tanggalLahir' => '2010-02-20',
+                'alamat' => 'Jl. Baru',
                 'email' => 'siswa.baru@example.test',
                 'telepon' => '080000000002',
             ])
             ->assertOk()
-            ->assertJsonPath('nis', 'SIS002');
+            ->assertJsonPath('nis', 'SIS002')
+            ->assertJsonPath('tempatLahir', 'Jakarta')
+            ->assertJsonPath('tanggalLahir', '2010-02-20')
+            ->assertJsonPath('alamat', 'Jl. Baru');
 
         $this->assertDatabaseMissing('users', ['username' => 'SIS001']);
         $this->assertTrue(Hash::check('SIS002', User::query()->where('username', 'SIS002')->first()?->password));
@@ -205,6 +220,12 @@ class MasterDataApiTest extends TestCase
             'nis' => 'SIS002',
             'nama' => 'Siswa Baru',
             'kelas' => 'Kelas Baru',
+        ]);
+        $this->assertDatabaseHas('students', [
+            'nis' => 'SIS002',
+            'tempat_lahir' => 'Jakarta',
+            'tanggal_lahir' => '2010-02-20',
+            'alamat' => 'Jl. Baru',
         ]);
         $this->assertDatabaseHas('attendance_records', [
             'nis' => 'SIS002',
@@ -218,6 +239,61 @@ class MasterDataApiTest extends TestCase
         $this->assertDatabaseHas('school_classes', [
             'nama' => 'Kelas Baru',
             'jumlah_siswa' => 1,
+        ]);
+    }
+
+    public function test_deleting_student_removes_student_login_account_and_updates_class_count(): void
+    {
+        $admin = User::factory()->create([
+            'roles' => [User::ROLE_ADMIN],
+        ]);
+
+        SchoolClass::query()->create([
+            'nama' => 'Kelas Delete',
+            'tahun_ajaran' => 'Tahun Test',
+            'kelompok' => 'Ikhwan',
+            'jumlah_siswa' => 0,
+        ]);
+
+        $createResponse = $this->actingAs($admin)->postJson('/api/students', [
+            'nis' => 'SISDEL001',
+            'nama' => 'Siswa Hapus',
+            'tahunAjaran' => 'Tahun Test',
+            'kelas' => 'Kelas Delete',
+            'jenisKelamin' => 'Laki-laki',
+            'email' => 'siswa.hapus@example.test',
+            'telepon' => '080000000777',
+        ]);
+
+        $createResponse->assertCreated();
+        $studentId = $createResponse->json('id');
+
+        $this->assertDatabaseHas('students', [
+            'id' => $studentId,
+            'nis' => 'SISDEL001',
+        ]);
+        $this->assertDatabaseHas('users', [
+            'username' => 'SISDEL001',
+        ]);
+        $this->assertDatabaseHas('school_classes', [
+            'nama' => 'Kelas Delete',
+            'jumlah_siswa' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/students/{$studentId}")
+            ->assertOk()
+            ->assertJsonPath('message', 'Siswa berhasil dihapus.');
+
+        $this->assertDatabaseMissing('students', [
+            'id' => $studentId,
+        ]);
+        $this->assertDatabaseMissing('users', [
+            'username' => 'SISDEL001',
+        ]);
+        $this->assertDatabaseHas('school_classes', [
+            'nama' => 'Kelas Delete',
+            'jumlah_siswa' => 0,
         ]);
     }
 

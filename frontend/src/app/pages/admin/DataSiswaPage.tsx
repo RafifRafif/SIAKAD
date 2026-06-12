@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Edit, Trash2, X, Upload } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Upload, Eye, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
@@ -27,6 +28,7 @@ export default function DataSiswaPage() {
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [detailStudent, setDetailStudent] = useState<Student | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -39,6 +41,9 @@ export default function DataSiswaPage() {
     tahunAjaran: '',
     kelas: '',
     jenisKelamin: 'Laki-laki',
+    tempatLahir: '',
+    tanggalLahir: '',
+    alamat: '',
     email: '',
     telepon: '',
   });
@@ -62,12 +67,26 @@ export default function DataSiswaPage() {
   }, []);
 
   const tahunAjaranList = useMemo(
-    () =>
-      tahunAjaranOptions.map((item) => ({
+    () => {
+      const options = tahunAjaranOptions.map((item) => ({
         value: tahunAjaranOptionValue(item),
         label: tahunAjaranOptionLabel(item),
-      })),
-    [tahunAjaranOptions]
+      }));
+      const knownValues = new Set(options.map((item) => item.value));
+
+      for (const student of students) {
+        if (student.tahunAjaran && !knownValues.has(student.tahunAjaran)) {
+          options.push({
+            value: student.tahunAjaran,
+            label: student.tahunAjaran,
+          });
+          knownValues.add(student.tahunAjaran);
+        }
+      }
+
+      return options;
+    },
+    [tahunAjaranOptions, students]
   );
 
   // Filter students
@@ -94,6 +113,9 @@ export default function DataSiswaPage() {
       tahunAjaran: '',
       kelas: '',
       jenisKelamin: '',
+      tempatLahir: '',
+      tanggalLahir: '',
+      alamat: '',
       email: '',
       telepon: '',
     });
@@ -103,6 +125,54 @@ export default function DataSiswaPage() {
   const handleImport = () => {
     setImportFile(null);
     setShowImportModal(true);
+  };
+
+  const handleDownloadTemplate = () => {
+    const rows = [
+      {
+        nis: '1234567890',
+        nama: 'Ahmad Fauzan',
+        tahunAjaran: '2026/2027 Ganjil',
+        kelas: 'X-1',
+        jenisKelamin: 'Laki-laki',
+        tempatLahir: 'Batam',
+        tanggalLahir: '2010-01-15',
+        alamat: 'Jl. Diponegoro No. 1',
+        email: 'ahmad@example.com',
+        telepon: '081234567890',
+      },
+    ];
+    const worksheet = XLSX.utils.json_to_sheet(rows, {
+      header: [
+        'nis',
+        'nama',
+        'tahunAjaran',
+        'kelas',
+        'jenisKelamin',
+        'tempatLahir',
+        'tanggalLahir',
+        'alamat',
+        'email',
+        'telepon',
+      ],
+    });
+    const workbook = XLSX.utils.book_new();
+
+    worksheet['!cols'] = [
+      { wch: 14 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 28 },
+      { wch: 24 },
+      { wch: 16 },
+    ];
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Siswa');
+    XLSX.writeFile(workbook, 'template-import-siswa.xlsx');
   };
 
   const handleImportSubmit = async () => {
@@ -118,10 +188,20 @@ export default function DataSiswaPage() {
       const response = await apiUpload<{
         imported: number;
         skipped: Array<{ row: number; message: string }>;
+        importedStudents?: Student[];
         students: Student[];
       }>('/api/students/import', body);
 
       setStudents(response.students);
+      const firstImportedStudent = response.importedStudents?.[0] ?? response.students.at(-1);
+
+      if (firstImportedStudent) {
+        setSearchQuery('');
+        setFilterKelas(firstImportedStudent.kelas);
+        setFilterTahunAjaran(firstImportedStudent.tahunAjaran);
+        setCurrentPage(1);
+      }
+
       showToast(
         `Import selesai: ${response.imported} siswa diproses, ${response.skipped.length} baris dilewati.`,
         'success'
@@ -134,7 +214,18 @@ export default function DataSiswaPage() {
 
   const handleEdit = (student: Student) => {
     setEditingStudent(student);
-    setFormData(student);
+    setFormData({
+      nis: student.nis,
+      nama: student.nama,
+      tahunAjaran: student.tahunAjaran,
+      kelas: student.kelas,
+      jenisKelamin: student.jenisKelamin,
+      tempatLahir: student.tempatLahir ?? '',
+      tanggalLahir: student.tanggalLahir ?? '',
+      alamat: student.alamat ?? '',
+      email: student.email,
+      telepon: student.telepon,
+    });
     setShowModal(true);
   };
 
@@ -171,6 +262,9 @@ export default function DataSiswaPage() {
         nama: formData.nama.trim(),
         tahunAjaran: formData.tahunAjaran.trim(),
         kelas: formData.kelas.trim(),
+        tempatLahir: formData.tempatLahir.trim(),
+        tanggalLahir: formData.tanggalLahir,
+        alamat: formData.alamat.trim(),
         email: formData.email.trim(),
         telepon: formData.telepon.trim(),
       };
@@ -366,6 +460,13 @@ export default function DataSiswaPage() {
                       <td className="px-6 py-4 text-right text-sm">
                         <div className="flex items-center justify-end gap-2">
                           <button
+                            onClick={() => setDetailStudent(student)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Lihat Detail"
+                          >
+                            <Eye size={18} />
+                          </button>
+                          <button
                             onClick={() => handleEdit(student)}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           >
@@ -429,6 +530,47 @@ export default function DataSiswaPage() {
 
       {/* Modal Form */}
       <AnimatePresence>
+        {detailStudent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setDetailStudent(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-2xl rounded-xl bg-white shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+                <h3 className="text-xl font-bold text-gray-900">Detail Siswa</h3>
+                <button
+                  onClick={() => setDetailStudent(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="grid gap-4 p-6 md:grid-cols-2">
+                <DetailItem label="NIS" value={detailStudent.nis} />
+                <DetailItem label="Nama Lengkap" value={detailStudent.nama} />
+                <DetailItem label="Tahun Ajaran" value={detailStudent.tahunAjaran} />
+                <DetailItem label="Kelas" value={detailStudent.kelas} />
+                <DetailItem label="Jenis Kelamin" value={detailStudent.jenisKelamin} />
+                <DetailItem label="Tempat Lahir" value={detailStudent.tempatLahir} />
+                <DetailItem label="Tanggal Lahir" value={detailStudent.tanggalLahir} />
+                <DetailItem label="Email" value={detailStudent.email} />
+                <DetailItem label="Telepon" value={detailStudent.telepon} />
+                <DetailItem label="Alamat" value={detailStudent.alamat} wide />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {showImportModal && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -470,11 +612,16 @@ export default function DataSiswaPage() {
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3">
-                  <p className="text-sm text-gray-600">
-                    {importFile ? `File terpilih: ${importFile.name}` : 'Belum ada file yang dipilih'}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB] transition-all hover:bg-blue-100"
+                >
+                  <Download size={18} />
+                  <span>Unduh Template Excel</span>
+                </button>
+
+                
 
                 <div className="flex gap-4 border-t border-gray-200 pt-4">
                   <button
@@ -617,6 +764,34 @@ export default function DataSiswaPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tempat Lahir
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tempatLahir}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tempatLahir: e.target.value })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tanggal Lahir
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.tanggalLahir}
+                        onChange={(e) =>
+                          setFormData({ ...formData, tanggalLahir: e.target.value })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Email
                       </label>
                       <input
@@ -637,6 +812,18 @@ export default function DataSiswaPage() {
                         required
                         value={formData.telepon}
                         onChange={(e) => setFormData({ ...formData, telepon: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Alamat
+                      </label>
+                      <textarea
+                        value={formData.alamat}
+                        onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+                        rows={3}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
                       />
                     </div>
@@ -674,6 +861,25 @@ const upsertStudent = (items: Student[], nextItem: Student) => {
 
   return [...items, nextItem];
 };
+
+const DetailItem = ({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string;
+  value?: string | null;
+  wide?: boolean;
+}) => (
+  <div className={wide ? 'md:col-span-2' : undefined}>
+    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+      {label}
+    </p>
+    <p className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900">
+      {value || '-'}
+    </p>
+  </div>
+);
 
 const getApiErrorMessage = (error: unknown, fallback: string) => {
   if (! (error instanceof ApiError)) {
