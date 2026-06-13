@@ -53,6 +53,7 @@ export default function PresensiGuru() {
   const [isSaving, setIsSaving] = useState(false);
   const [presensi, setPresensi] = useState<{ [key: number]: PresensiStatus | null }>({});
   const [keterangan, setKeterangan] = useState<{ [key: number]: string }>({});
+  const [capaianPembelajaran, setCapaianPembelajaran] = useState('');
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
@@ -166,6 +167,22 @@ export default function PresensiGuru() {
     setKeterangan((current) => ({ ...current, [id]: value }));
   };
 
+  const buildKeteranganPresensi = (studentId: number) => {
+    const keteranganIzin = keterangan[studentId]?.trim();
+    const capaian = capaianPembelajaran.trim();
+    const parts = [];
+
+    if (keteranganIzin) {
+      parts.push(`Keterangan: ${keteranganIzin}`);
+    }
+
+    if (capaian) {
+      parts.push(`Capaian Pembelajaran: ${capaian}`);
+    }
+
+    return parts.length > 0 ? parts.join('\n') : null;
+  };
+
   const handleSubmit = async () => {
     if (isSaving) {
       return;
@@ -208,7 +225,7 @@ export default function PresensiGuru() {
             mapel: selectedMapel || null,
             tanggal,
             status: presensi[student.id],
-            keterangan: keterangan[student.id] || null,
+            keterangan: buildKeteranganPresensi(student.id),
           })
         )
       );
@@ -292,6 +309,18 @@ export default function PresensiGuru() {
               ))}
             </select>
           </div>
+        </div>
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Capaian Pembelajaran
+          </label>
+          <textarea
+            value={capaianPembelajaran}
+            onChange={(event) => setCapaianPembelajaran(event.target.value)}
+            rows={3}
+            placeholder="Tuliskan capaian pembelajaran pada pertemuan ini"
+            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+          />
         </div>
       </div>
 

@@ -222,9 +222,10 @@ class AcademicActivityController extends Controller
     public function quranSubmissions(Request $request): JsonResponse
     {
         $query = QuranSubmission::query()->orderByDesc('tanggal')->orderBy('nama');
+        $studentNis = $this->studentNisForRequest($request);
 
-        if ($request->user()?->hasRole(User::ROLE_SISWA)) {
-            $query->where('nis', $request->user()->username);
+        if ($studentNis !== null) {
+            $query->where('nis', $studentNis);
         } elseif ($request->filled('nis')) {
             $query->where('nis', (string) $request->string('nis'));
         }
@@ -255,6 +256,11 @@ class AcademicActivityController extends Controller
             $quranSubmission = QuranSubmission::query()->create($payload);
         } else {
             $status = 200;
+
+            if (! $request->hasFile('fotoSetoran')) {
+                unset($payload['foto_setoran']);
+            }
+
             $quranSubmission->update($payload);
             $quranSubmission = $quranSubmission->fresh();
         }
@@ -300,13 +306,13 @@ class AcademicActivityController extends Controller
         $siswaGrades = StudentGrade::query()->latest();
         $siswaAttendance = AttendanceRecord::query()->latest();
         $siswaQuran = QuranSubmission::query()->latest();
+        $studentNis = $this->studentNisForRequest($request);
 
-        if ($request->user()?->hasRole(User::ROLE_SISWA)) {
-            $nis = $request->user()->username;
-
-            $siswaGrades->where('nis', $nis);
-            $siswaAttendance->where('nis', $nis);
-            $siswaQuran->where('nis', $nis);
+        if ($studentNis !== null) {
+            $siswaGrades->where('nis', $studentNis);
+            $siswaAttendance->where('nis', $studentNis);
+            $siswaQuran->where('nis', $studentNis);
+            $quranBase->where('nis', $studentNis);
         }
 
         return response()->json([
@@ -553,6 +559,18 @@ class AcademicActivityController extends Controller
             ?? $user->name;
     }
 
+    private function studentNisForRequest(Request $request): ?string
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        if ($user === null || ! $user->hasRole(User::ROLE_SISWA)) {
+            return null;
+        }
+
+        return $user->username;
+    }
+
     /**
      * @return array{month: int, year: int|null}|null
      */
@@ -641,12 +659,23 @@ class AcademicActivityController extends Controller
             'ayatSelesai' => ['required', 'integer', 'min:1', 'gte:ayatMulai'],
             'penilaian' => ['required', Rule::in(['Lancar', 'Kurang Lancar', 'Perlu Perbaikan'])],
             'keterangan' => ['nullable', 'string'],
+            'fotoSetoran' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
             'progress' => ['nullable', 'integer', 'min:0', 'max:30'],
             'guru' => ['nullable', 'string', 'max:255'],
         ]);
 
         $student = Student::query()->where('nis', $data['nis'])->first();
         $guru = isset($data['guru']) ? trim($data['guru']) : null;
+        $fotoSetoran = null;
+
+        if ($request->hasFile('fotoSetoran')) {
+            $file = $request->file('fotoSetoran');
+            $content = file_get_contents($file->getRealPath());
+
+            if ($content !== false) {
+                $fotoSetoran = 'data:'.$file->getMimeType().';base64,'.base64_encode($content);
+            }
+        }
 
         return [
             'student_id' => $student?->id,
@@ -659,6 +688,7 @@ class AcademicActivityController extends Controller
             'ayat_selesai' => $data['ayatSelesai'],
             'penilaian' => $data['penilaian'],
             'keterangan' => $data['keterangan'] ?? null,
+            'foto_setoran' => $fotoSetoran,
             'progress_juz' => $data['progress'] ?? 0,
             'guru' => $guru !== '' && $guru !== null ? $guru : $this->teacherNameForRequest($request),
         ];

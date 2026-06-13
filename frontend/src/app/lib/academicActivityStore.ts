@@ -42,6 +42,7 @@ export interface QuranSubmissionItem {
   penilaian: string;
   nilai?: string;
   keterangan?: string | null;
+  fotoSetoran?: string | null;
   progress: number;
   guru?: string | null;
 }

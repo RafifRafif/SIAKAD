@@ -22,6 +22,7 @@ export default function RiwayatSetoranQuran() {
   const [filterTanggal, setFilterTanggal] = useState('');
   const [filterBulan, setFilterBulan] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [previewFoto, setPreviewFoto] = useState<string | null>(null);
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
@@ -116,6 +117,30 @@ export default function RiwayatSetoranQuran() {
         <h2 className="text-2xl font-bold text-gray-900">Riwayat Setoran Al-Qur&apos;an</h2>
         <p className="mt-1 text-gray-600">Lihat riwayat setoran siswa berdasarkan data backend</p>
       </div>
+
+      {previewFoto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h3 className="font-semibold text-gray-900">Foto Setoran</h3>
+              <button
+                type="button"
+                onClick={() => setPreviewFoto(null)}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+              >
+                Tutup
+              </button>
+            </div>
+            <div className="max-h-[75vh] overflow-auto bg-gray-50 p-4">
+              <img
+                src={previewFoto}
+                alt="Foto setoran Al-Qur'an"
+                className="mx-auto max-h-[70vh] max-w-full rounded-lg object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-1">
@@ -229,6 +254,9 @@ export default function RiwayatSetoranQuran() {
                           Penilaian
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">
+                          Foto
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">
                           Keterangan
                         </th>
                       </tr>
@@ -249,6 +277,19 @@ export default function RiwayatSetoranQuran() {
                             <span className={`rounded-full px-3 py-1 font-medium ${penilaianClassName(item.penilaian)}`}>
                               {item.penilaian}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {item.fotoSetoran ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewFoto(item.fotoSetoran ?? null)}
+                                className="inline-flex rounded-lg bg-blue-50 px-3 py-1 text-sm font-medium text-[#2563EB] hover:bg-blue-100"
+                              >
+                                Lihat Foto
+                              </button>
+                            ) : (
+                              '-'
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-700">
                             {item.keterangan || '-'}

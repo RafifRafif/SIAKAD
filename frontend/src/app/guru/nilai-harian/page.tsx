@@ -1,10 +1,10 @@
 import GuruAccessGate from '../../pages/guru/GuruAccessGate';
-import SetoranQuran from '../../pages/guru/SetoranQuran';
+import InputNilaiHarian from '../../pages/guru/InputNilaiHarian';
 
-export default function GuruQuranPage() {
+export default function GuruNilaiHarianPage() {
   return (
     <GuruAccessGate requiredAccess="Guru Mapel">
-      <SetoranQuran />
+      <InputNilaiHarian />
     </GuruAccessGate>
   );
 }

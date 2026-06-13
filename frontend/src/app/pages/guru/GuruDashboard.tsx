@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  BellRing,
   BookOpen,
   CalendarDays,
   ClipboardList,
@@ -59,6 +58,7 @@ export default function GuruDashboard() {
 
   const hasWaliKelas = guruAccess.includes('Wali Kelas');
   const hasGuruMapel = guruAccess.includes('Guru Mapel');
+  const accessLabel = guruAccess.length > 0 ? guruAccess.join(' & ') : 'Belum ada akses';
 
   if (!isReady) {
     return (
@@ -78,13 +78,33 @@ export default function GuruDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="mb-2 text-2xl font-bold text-gray-900">
-          Selamat Datang, {displayName}
-        </h2>
-        <p className="text-gray-600">
-          Fitur yang tampil mengikuti akses yang diberikan admin pada data guru.
-        </p>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-6 border-l-4 border-[#2563EB] p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#2563EB]">
+              Dashboard Guru
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">
+              Selamat Datang, {displayName}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-gray-600">
+              Pantau presensi, penilaian, dan aktivitas pembelajaran dari satu ruang kerja yang mengikuti akses guru.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-medium text-blue-700">Akses Aktif</p>
+              <p className="mt-1 text-sm font-semibold text-gray-900">{accessLabel}</p>
+            </div>
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
+                <CalendarDays size={15} />
+                <span>Jadwal Hari Ini</span>
+              </div>
+              <p className="mt-1 text-2xl font-bold text-gray-900">{assignments.length}</p>
+            </div>
+          </div>
+      </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -97,7 +117,7 @@ export default function GuruDashboard() {
         {hasGuruMapel && (
           <>
             <StatCard icon={BookOpen} label="Mapel Diampu" value={String(assignments.length)} color="bg-indigo-100 text-indigo-600" />
-            <StatCard icon={Clock3} label="Input Nilai" value={String(summary.guru.inputNilai)} color="bg-orange-100 text-orange-600" />
+            <StatCard icon={Clock3} label="Input Nilai Akhir" value={String(summary.guru.inputNilai)} color="bg-orange-100 text-orange-600" />
           </>
         )}
       </div>
@@ -134,7 +154,7 @@ export default function GuruDashboard() {
               ))}
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <Link
                 href="/guru/presensi"
                 className="flex items-center justify-center rounded-lg bg-[#2563EB] px-3 py-3 text-center text-sm font-medium text-white transition-all hover:bg-blue-700"
@@ -145,13 +165,19 @@ export default function GuruDashboard() {
                 href="/guru/nilai"
                 className="flex items-center justify-center rounded-lg border border-gray-300 px-3 py-3 text-center text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
               >
-                Input Nilai
+                Input Nilai Akhir
+              </Link>
+              <Link
+                href="/guru/nilai-harian"
+                className="flex items-center justify-center rounded-lg border border-gray-300 px-3 py-3 text-center text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
+              >
+                Input Nilai Harian dan Quiz
               </Link>
               <Link
                 href="/guru/rekap-absensi"
                 className="flex items-center justify-center rounded-lg border border-gray-300 px-3 py-3 text-center text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
               >
-                Rekap Absensi
+                Rekap Presensi
               </Link>
             </div>
           </motion.div>

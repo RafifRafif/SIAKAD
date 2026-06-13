@@ -52,18 +52,35 @@ export default function GuruMapelDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="mb-2 text-2xl font-bold text-gray-900">Dashboard Guru Mata Pelajaran</h2>
-        <p className="text-gray-600">
-          Kelola jadwal mengajar, penilaian, dan progres pembelajaran per mata pelajaran.
-        </p>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-6 border-l-4 border-[#2563EB] p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#2563EB]">
+              Dashboard Guru Mata Pelajaran
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">Ruang Kerja Guru Mapel</h2>
+            <p className="mt-2 max-w-2xl text-sm text-gray-600">
+              Kelola jadwal mengajar, presensi, penilaian, dan progres pembelajaran per mata pelajaran.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-medium text-blue-700">Kelas Diampu</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{uniqueClasses}</p>
+            </div>
+            <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3">
+              <p className="text-xs font-medium text-amber-700">Rata-rata Tugas</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{averageTaskGrade}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={BookOpen} label="Mapel Diampu" value={String(assignments.length)} color="bg-blue-100 text-blue-600" />
         <StatCard icon={GraduationCap} label="Kelas Diampu" value={String(uniqueClasses)} color="bg-green-100 text-green-600" />
         <StatCard icon={Clock3} label="Presensi" value={String(summary.guru.presensi)} color="bg-purple-100 text-purple-600" />
-        <StatCard icon={FileText} label="Input Nilai" value={String(summary.guru.inputNilai)} color="bg-orange-100 text-orange-600" />
+        <StatCard icon={FileText} label="Input Nilai Akhir" value={String(summary.guru.inputNilai)} color="bg-orange-100 text-orange-600" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -104,7 +121,7 @@ export default function GuruMapelDashboard() {
               href="/guru-mapel/nilai"
               className="flex items-center justify-center rounded-lg bg-[#2563EB] py-3 text-center font-medium text-white transition-all hover:bg-blue-700"
             >
-              Input Nilai
+              Input Nilai Akhir
             </Link>
             <Link
               href="/guru-mapel/presensi"
@@ -116,7 +133,7 @@ export default function GuruMapelDashboard() {
               href="/guru-mapel/rekap-absensi"
               className="flex items-center justify-center rounded-lg border border-gray-300 py-3 text-center font-medium text-gray-700 transition-all hover:bg-gray-50 sm:col-span-2"
             >
-              Rekap Absensi
+              Rekap Presensi
             </Link>
           </div>
         </motion.div>

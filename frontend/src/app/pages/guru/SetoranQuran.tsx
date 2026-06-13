@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Save, Search } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
-import { apiGet, apiPost } from '../../lib/apiClient';
+import { apiGet, apiUpload } from '../../lib/apiClient';
 import type { QuranSubmissionItem } from '../../lib/academicActivityStore';
 import type { StudentItem } from '../../lib/siswaStore';
 
@@ -27,12 +27,13 @@ export default function SetoranQuran() {
   const [submissions, setSubmissions] = useState<QuranSubmissionItem[]>([]);
   const [surahs, setSurahs] = useState<QuranSurah[]>([]);
   const [selectedSiswa, setSelectedSiswa] = useState<number | null>(null);
-  const tanggal = getCurrentDate();
+  const [tanggal, setTanggal] = useState(getCurrentDate());
   const [surah, setSurah] = useState('');
   const [ayatMulai, setAyatMulai] = useState('');
   const [ayatSelesai, setAyatSelesai] = useState('');
   const [keterangan, setKeterangan] = useState('');
   const [nilai, setNilai] = useState('Lancar');
+  const [fotoSetoran, setFotoSetoran] = useState<File | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
@@ -153,18 +154,23 @@ export default function SetoranQuran() {
         30,
         Math.ceil((nextCompletedAyat / QURAN_TOTAL_AYAT) * 30)
       );
-      const savedSubmission = await apiPost<QuranSubmissionItem>('/api/quran-submissions', {
-        nis: selectedStudent.nis,
-        nama: selectedStudent.nama,
-        kelas: selectedStudent.kelas,
-        tanggal,
-        surah: selectedSurah.namaLatin,
-        ayatMulai: ayatMulaiNumber,
-        ayatSelesai: ayatSelesaiNumber,
-        penilaian: nilai,
-        keterangan: keterangan.trim() || null,
-        progress: estimatedProgressJuz,
-      });
+      const body = new FormData();
+      body.set('nis', selectedStudent.nis);
+      body.set('nama', selectedStudent.nama);
+      body.set('kelas', selectedStudent.kelas);
+      body.set('tanggal', tanggal);
+      body.set('surah', selectedSurah.namaLatin);
+      body.set('ayatMulai', String(ayatMulaiNumber));
+      body.set('ayatSelesai', String(ayatSelesaiNumber));
+      body.set('penilaian', nilai);
+      body.set('keterangan', keterangan.trim());
+      body.set('progress', String(estimatedProgressJuz));
+
+      if (fotoSetoran) {
+        body.set('fotoSetoran', fotoSetoran);
+      }
+
+      const savedSubmission = await apiUpload<QuranSubmissionItem>('/api/quran-submissions', body);
 
       setSubmissions((current) => upsertQuranSubmission(current, savedSubmission));
       showToast('Setoran Al-Qur\'an berhasil disimpan ke backend!', 'success');
@@ -172,6 +178,7 @@ export default function SetoranQuran() {
       setAyatMulai('');
       setAyatSelesai('');
       setKeterangan('');
+      setFotoSetoran(null);
     } catch {
       showToast('Gagal menyimpan setoran Al-Qur\'an ke backend.', 'error');
     } finally {
@@ -289,12 +296,12 @@ export default function SetoranQuran() {
                   <input
                     type="date"
                     value={tanggal}
-                    readOnly
+                    onChange={(event) => setTanggal(event.target.value)}
                     required
-                    className="w-full cursor-not-allowed rounded-lg border border-gray-300 bg-gray-100 px-4 py-2 text-gray-700 outline-none"
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-700 outline-none focus:ring-2 focus:ring-[#2563EB]"
                   />
                   <p className="mt-2 text-xs text-gray-500">
-                    Tanggal otomatis mengikuti hari ini dan tidak dapat diubah.
+                    Tanggal otomatis mengikuti hari ini, tetapi dapat disesuaikan.
                   </p>
                 </div>
                 <div>
@@ -376,6 +383,21 @@ export default function SetoranQuran() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Foto Setoran
+                </label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={(event) => setFotoSetoran(event.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-[#2563EB] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Format JPG, PNG, atau WEBP. Maksimal 2 MB.
+                </p>
               </div>
 
               <div>

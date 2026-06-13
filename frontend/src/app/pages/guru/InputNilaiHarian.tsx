@@ -5,48 +5,52 @@ import { Save, Upload, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { apiGet, apiPost } from '../../lib/apiClient';
-import type { LearningAssignmentItem } from '../../lib/academicActivityStore';
-import {
-  defaultBobotPenilaianConfig,
-  getGradeLabel,
-  type BobotPenilaianConfig,
-  type BobotPenilaianItem,
-  type GradeRangeItem,
-} from '../../lib/bobotPenilaianStore';
+import type { LearningAssignmentItem, StudentGradeItem } from '../../lib/academicActivityStore';
 import type { KelasItem } from '../../lib/kelasStore';
 import type { MasterPelajaran } from '../../lib/pelajaranStore';
 import type { StudentItem } from '../../lib/siswaStore';
 
-type JenisPenilaian = 'UTS' | 'UAS' | 'Quiz' | 'Tugas';
+const tugasPenilaianOptions = [
+  'Tugas 1',
+  'Tugas 2',
+  'Tugas 3',
+  'Tugas 4',
+  'Tugas 5',
+  'Tugas 6',
+  'Tugas 7',
+  'Tugas 8',
+  'Tugas 9',
+  'Tugas 10',
+] as const;
 
-const jenisPenilaianOptions: JenisPenilaian[] = ['UTS', 'UAS', 'Quiz', 'Tugas'];
+const quizPenilaianOptions = [
+  'Quiz 1',
+  'Quiz 2',
+  'Quiz 3',
+  'Quiz 4',
+  'Quiz 5',
+  'Quiz 6',
+  'Quiz 7',
+  'Quiz 8',
+  'Quiz 9',
+  'Quiz 10',
+] as const;
 
-export default function InputNilai() {
+const jenisPenilaianOptions = [...tugasPenilaianOptions, ...quizPenilaianOptions] as const;
+
+type JenisPenilaian = typeof jenisPenilaianOptions[number];
+
+export default function InputNilaiHarian() {
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignmentItem[]>([]);
   const [selectedKelas, setSelectedKelas] = useState('');
   const [selectedMapel, setSelectedMapel] = useState('');
   const [tanggalSekarang, setTanggalSekarang] = useState('');
-  const [bobotPenilaian, setBobotPenilaian] = useState<BobotPenilaianItem[]>(
-    defaultBobotPenilaianConfig.bobot
-  );
-  const [gradeRanges, setGradeRanges] = useState<GradeRangeItem[]>(
-    defaultBobotPenilaianConfig.gradeRanges
-  );
   const [nilai, setNilai] = useState<Record<number, Partial<Record<JenisPenilaian, string>>>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importContent, setImportContent] = useState('');
   const { toasts, showToast, removeToast } = useToast();
-
-  useEffect(() => {
-    void apiGet<BobotPenilaianConfig>('/api/assessment-setting')
-      .then((config) => {
-        setBobotPenilaian(config.bobot);
-        setGradeRanges(config.gradeRanges);
-      })
-      .catch(() => showToast('Gagal memuat bobot penilaian dari backend.', 'error'));
-  }, []);
 
   useEffect(() => {
     void apiGet<StudentItem[]>('/api/students')
@@ -69,6 +73,45 @@ export default function InputNilai() {
       .then(setLearningAssignments)
       .catch(() => showToast('Gagal memuat data pelajaran yang diampu dari backend.', 'error'));
   }, []);
+
+  useEffect(() => {
+    if (!selectedKelas || !selectedMapel || students.length === 0) {
+      return;
+    }
+
+    const query = new URLSearchParams({
+      kelas: selectedKelas,
+      mapel: selectedMapel,
+    });
+    const studentByNis = new Map(students.map((student) => [student.nis, student]));
+
+    void apiGet<StudentGradeItem[]>(`/api/grades?${query.toString()}`)
+      .then((items) => {
+        setNilai((current) => {
+          const next = { ...current };
+
+          items.forEach((item) => {
+            if (!jenisPenilaianOptions.includes(item.jenis as JenisPenilaian)) {
+              return;
+            }
+
+            const student = studentByNis.get(item.nis);
+
+            if (!student) {
+              return;
+            }
+
+            next[student.id] = {
+              ...next[student.id],
+              [item.jenis as JenisPenilaian]: String(item.nilai),
+            };
+          });
+
+          return next;
+        });
+      })
+      .catch(() => showToast('Gagal memuat rekap nilai harian dari backend.', 'error'));
+  }, [selectedKelas, selectedMapel, students]);
 
   const kelasOptions = useMemo<KelasItem[]>(
     () =>
@@ -160,18 +203,26 @@ export default function InputNilai() {
       .map((row) => row.split(',').map((cell) => cell.trim()));
 
     if (rows.length < 2) {
-      showToast('Format import belum valid. Gunakan header nis,uts,uas,quiz,tugas.', 'error');
+      showToast(
+        'Format import belum valid. Gunakan header nis,tugas1,...,tugas10,quiz1,...,quiz10.',
+        'error'
+      );
       return;
     }
 
-    const headers = rows[0].map((header) => header.toLowerCase());
+    const headers = rows[0].map((header) => header.toLowerCase().replace(/\s+/g, ''));
     const nisIndex = headers.indexOf('nis');
     const jenisIndexes = Object.fromEntries(
-      jenisPenilaianOptions.map((jenis) => [jenis, headers.indexOf(jenis.toLowerCase())])
+      jenisPenilaianOptions.map((jenis) => [
+        jenis,
+        headers.indexOf(jenis.toLowerCase().replace(/\s+/g, '')),
+      ])
     ) as Record<JenisPenilaian, number>;
 
-    if (nisIndex === -1 || jenisPenilaianOptions.some((jenis) => jenisIndexes[jenis] === -1)) {
-      showToast('Header CSV harus berisi nis, uts, uas, quiz, dan tugas.', 'error');
+    const availableJenis = jenisPenilaianOptions.filter((jenis) => jenisIndexes[jenis] !== -1);
+
+    if (nisIndex === -1 || availableJenis.length === 0) {
+      showToast('Header CSV harus berisi nis dan minimal satu kolom tugas/quiz.', 'error');
       return;
     }
 
@@ -189,7 +240,7 @@ export default function InputNilai() {
           return;
         }
 
-        const importedNilai = jenisPenilaianOptions.reduce<Partial<Record<JenisPenilaian, string>>>(
+        const importedNilai = availableJenis.reduce<Partial<Record<JenisPenilaian, string>>>(
           (result, jenis) => {
             const value = row[jenisIndexes[jenis]] ?? '';
             const numberValue = Number(value);
@@ -247,11 +298,18 @@ export default function InputNilai() {
       return;
     }
 
-    const allFilled = siswaData.every((student) =>
-      jenisPenilaianOptions.every((jenis) => nilai[student.id]?.[jenis] !== '')
+    const nilaiSiapSimpan = siswaData.flatMap((student) =>
+      jenisPenilaianOptions
+        .filter((jenis) => nilai[student.id]?.[jenis] !== '')
+        .map((jenis) => ({
+          student,
+          jenis,
+          value: Number(nilai[student.id]?.[jenis]),
+        }))
     );
-    if (!allFilled) {
-      showToast('Harap isi semua jenis nilai untuk setiap siswa!', 'error');
+
+    if (nilaiSiapSimpan.length === 0) {
+      showToast('Isi minimal satu nilai tugas atau quiz terlebih dahulu.', 'error');
       return;
     }
 
@@ -259,19 +317,17 @@ export default function InputNilai() {
 
     try {
       await Promise.all(
-        siswaData.flatMap((student) =>
-          jenisPenilaianOptions.map((jenis) =>
-            apiPost('/api/grades', {
-              nis: student.nis,
-              nama: student.nama,
-              kelas: student.kelas,
-              tahunAjaran: student.tahunAjaran,
-              mapel: selectedMapel,
-              jenis,
-              nilai: Number(nilai[student.id]?.[jenis]),
-              tanggal: tanggalSekarang,
-            })
-          )
+        nilaiSiapSimpan.map(({ student, jenis, value }) =>
+          apiPost('/api/grades', {
+            nis: student.nis,
+            nama: student.nama,
+            kelas: student.kelas,
+            tahunAjaran: student.tahunAjaran,
+            mapel: selectedMapel,
+            jenis,
+            nilai: value,
+            tanggal: tanggalSekarang,
+          })
         )
       );
 
@@ -295,15 +351,111 @@ export default function InputNilai() {
     return (validNilai.reduce((a, b) => a + b, 0) / validNilai.length).toFixed(2);
   };
 
-  const bobotByJenis = useMemo(
-    () =>
-      Object.fromEntries(
-        jenisPenilaianOptions.map((jenis) => [
-          jenis,
-          bobotPenilaian.find((item) => item.jenisPenilaian === jenis)?.bobot ?? 0,
-        ])
-      ) as Record<JenisPenilaian, number>,
-    [bobotPenilaian]
+  const renderNilaiHarianTable = () => (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900">Input Nilai Harian dan Quiz - {selectedMapel || '-'}</h3>
+        <p className="mt-1 text-sm text-gray-600">
+          Baris Quiz ditampilkan di bawah baris Tugas untuk setiap siswa.
+        </p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1320px]">
+          <thead className="border-b border-gray-200 bg-gray-50">
+            <tr>
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">
+                No
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">
+                NIS
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">
+                Nama Siswa
+              </th>
+              <th className="px-6 py-4 text-center text-xs font-semibold uppercase text-gray-600">
+                Jenis
+              </th>
+              {Array.from({ length: 10 }, (_, index) => (
+                <th
+                  key={index + 1}
+                  className="px-4 py-4 text-center text-xs font-semibold uppercase text-gray-600"
+                >
+                  Nilai {index + 1}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {!hasSelectedFilters && (
+              <tr>
+                <td colSpan={14} className="px-4 py-8 text-center text-sm text-gray-500">
+                  Pilih kelas dan mata pelajaran terlebih dahulu untuk menampilkan data nilai.
+                </td>
+              </tr>
+            )}
+            {hasSelectedFilters && siswaData.length === 0 && (
+              <tr>
+                <td colSpan={14} className="px-4 py-8 text-center text-sm text-gray-500">
+                  Belum ada data siswa untuk kelas dan mata pelajaran yang dipilih.
+                </td>
+              </tr>
+            )}
+            {siswaData.map((siswa, index) => (
+              <motion.tr
+                key={siswa.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * 0.05 }}
+                className="align-middle hover:bg-gray-50"
+              >
+                <td rowSpan={2} className="border-b border-gray-200 px-6 py-4 text-sm font-medium text-gray-900">
+                  {index + 1}
+                </td>
+                <td rowSpan={2} className="border-b border-gray-200 px-6 py-4 text-sm text-gray-900">{siswa.nis}</td>
+                <td rowSpan={2} className="border-b border-gray-200 px-6 py-4 text-sm text-gray-900">{siswa.nama}</td>
+                <td className="px-6 py-4 text-center text-sm font-semibold text-gray-900">Tugas</td>
+                {tugasPenilaianOptions.map((jenis) => (
+                  <td key={jenis} className="px-4 py-4 text-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={nilai[siswa.id]?.[jenis] ?? ''}
+                      onChange={(e) => handleNilaiChange(siswa.id, jenis, e.target.value)}
+                      placeholder="0-100"
+                      className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-center outline-none focus:ring-2 focus:ring-[#2563EB]"
+                    />
+                  </td>
+                ))}
+              </motion.tr>
+            )).flatMap((row, index) => {
+              const siswa = siswaData[index];
+
+              return [
+                row,
+                <tr key={`${siswa.id}-quiz`} className="border-b border-gray-200 hover:bg-gray-50">
+                  <td className="px-6 py-4 text-center text-sm font-semibold text-gray-900">Quiz</td>
+                  {quizPenilaianOptions.map((jenis) => (
+                    <td key={jenis} className="px-4 py-4 text-center">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={nilai[siswa.id]?.[jenis] ?? ''}
+                        onChange={(e) => handleNilaiChange(siswa.id, jenis, e.target.value)}
+                        placeholder="0-100"
+                        className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-center outline-none focus:ring-2 focus:ring-[#2563EB]"
+                      />
+                    </td>
+                  ))}
+                </tr>,
+              ];
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 
   return (
@@ -319,8 +471,8 @@ export default function InputNilai() {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Input Nilai Akhir</h2>
-          <p className="text-gray-600 mt-1">Input nilai akhir ujian, quiz, dan tugas siswa</p>
+          <h2 className="text-2xl font-bold text-gray-900">Input Nilai Harian dan Quiz</h2>
+          <p className="text-gray-600 mt-1">Input nilai harian tugas dan quiz siswa</p>
         </div>
         <button
           type="button"
@@ -342,9 +494,9 @@ export default function InputNilai() {
           >
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
               <div>
-                <h3 className="font-semibold text-gray-900">Import Nilai Akhir</h3>
+                <h3 className="font-semibold text-gray-900">Import Nilai</h3>
                 <p className="mt-1 text-sm text-gray-600">
-                  Gunakan CSV dengan header nis,uts,uas,quiz,tugas
+                  Gunakan CSV dengan header nis,tugas1,...,tugas10,quiz1,...,quiz10
                 </p>
               </div>
               <button
@@ -359,7 +511,7 @@ export default function InputNilai() {
 
             <div className="space-y-4 px-6 py-5">
               <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                Format contoh: nis,uts,uas,quiz,tugas
+                Format contoh: nis,tugas1,tugas2,...,tugas10,quiz1,quiz2,...,quiz10
               </div>
               <input
                 type="file"
@@ -371,7 +523,9 @@ export default function InputNilai() {
                 value={importContent}
                 onChange={(event) => setImportContent(event.target.value)}
                 rows={8}
-                placeholder={'nis,uts,uas,quiz,tugas\n2026001,85,90,80,88\n2026002,78,82,75,84'}
+                placeholder={
+                  'nis,tugas1,tugas2,tugas3,tugas4,tugas5,tugas6,tugas7,tugas8,tugas9,tugas10,quiz1,quiz2,quiz3,quiz4,quiz5,quiz6,quiz7,quiz8,quiz9,quiz10\n2026001,85,90,80,88,82,91,87,89,90,86,78,80,82,84,86,88,90,92,94,96\n2026002,78,82,75,84,80,79,83,81,85,88,76,78,80,82,84,86,88,90,92,94'
+                }
                 className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-[#2563EB]"
               />
             </div>
@@ -458,7 +612,7 @@ export default function InputNilai() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-gray-200 p-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="font-semibold text-gray-900">Input Nilai Akhir - {selectedMapel || '-'}</h3>
+            <h3 className="font-semibold text-gray-900">Input Nilai Harian dan Quiz - {selectedMapel || '-'}</h3>
             <p className="text-sm text-gray-600 mt-1">
               Kelas {selectedKelas || '-'}
             </p>
@@ -470,118 +624,18 @@ export default function InputNilai() {
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px]">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  No
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  NIS
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  Nama Siswa
-                </th>
-                {jenisPenilaianOptions.map((jenis) => (
-                  <th
-                    key={jenis}
-                    className="px-4 py-4 text-center text-xs font-semibold text-gray-600 uppercase"
-                  >
-                    {jenis}
-                  </th>
-                ))}
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                  Rata-rata
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {!hasSelectedFilters && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
-                    Pilih kelas dan mata pelajaran terlebih dahulu untuk menampilkan data nilai.
-                  </td>
-                </tr>
-              )}
-              {hasSelectedFilters && siswaData.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
-                    Belum ada data siswa untuk kelas dan mata pelajaran yang dipilih.
-                  </td>
-                </tr>
-              )}
-              {siswaData.map((siswa, index) => {
-                const nilaiSiswa = jenisPenilaianOptions
-                  .map((jenis) => nilai[siswa.id]?.[jenis])
-                  .filter((item): item is string => Boolean(item))
-                  .map((item) => Number(item));
-                const rataRataSiswa =
-                  nilaiSiswa.length > 0
-                    ? nilaiSiswa.reduce((total, item) => total + item, 0) / nilaiSiswa.length
-                    : null;
-                const grade =
-                  rataRataSiswa === null ? null : getGradeLabel(rataRataSiswa, gradeRanges);
-                return (
-                  <motion.tr
-                    key={siswa.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="hover:bg-gray-50"
-                  >
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                      {index + 1}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{siswa.nis}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{siswa.nama}</td>
-                    {jenisPenilaianOptions.map((jenis) => (
-                      <td key={jenis} className="px-4 py-4 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={nilai[siswa.id]?.[jenis] ?? ''}
-                          onChange={(e) => handleNilaiChange(siswa.id, jenis, e.target.value)}
-                          placeholder="0-100"
-                          className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-center outline-none focus:ring-2 focus:ring-[#2563EB]"
-                        />
-                      </td>
-                    ))}
-                    <td className="px-6 py-4">
-                      {rataRataSiswa !== null && grade !== null && (
-                        <span
-                          className={`px-3 py-1 rounded-full font-medium ${
-                            grade === 'A'
-                              ? 'bg-green-100 text-green-700'
-                              : grade === 'B'
-                              ? 'bg-blue-100 text-blue-700'
-                              : grade === 'C'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {rataRataSiswa.toFixed(2)} / {grade}
-                        </span>
-                      )}
-                    </td>
-                  </motion.tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      {renderNilaiHarianTable()}
 
-        <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-end">
-          <button
-            onClick={handleSubmit}
-            className="flex items-center gap-2 bg-[#2563EB] text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md"
-          >
-            <Save size={20} />
-            <span>Simpan Nilai</span>
-          </button>
-        </div>
+      <div className="flex justify-end rounded-xl border border-gray-200 bg-gray-50 p-6">
+        <button
+          onClick={handleSubmit}
+          className="flex items-center gap-2 bg-[#2563EB] text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-all font-medium shadow-md"
+        >
+          <Save size={20} />
+          <span>Simpan Nilai</span>
+        </button>
       </div>
 
     </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, GraduationCap, School, BookOpen } from 'lucide-react';
+import { BookOpen, CalendarDays, GraduationCap, School, Users } from 'lucide-react';
 import { StatCard } from '../../components/dashboard/StatCard';
 import { apiGet } from '../../lib/apiClient';
 import {
@@ -37,17 +37,41 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Welcome Section */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Selamat Datang, Admin!
-        </h2>
-        <p className="text-gray-600">
-          Berikut adalah ringkasan sistem informasi akademik hari ini
-        </p>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-6 border-l-4 border-[#2563EB] p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#2563EB]">
+              Dashboard Admin
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">
+              Selamat Datang, Admin!
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-gray-600">
+              Kelola data akademik, kelas, guru, siswa, dan pembelajaran dalam satu pusat kendali.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-blue-700">
+                <CalendarDays size={15} />
+                <span>Ringkasan Hari Ini</span>
+              </div>
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {summary.admin.totalSiswa + summary.admin.totalGuru}
+              </p>
+              <p className="text-xs text-gray-600">Total warga sekolah terdata</p>
+            </div>
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+              <p className="text-xs font-medium text-emerald-700">Master Akademik</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {totalKelas + totalPelajaran}
+              </p>
+              <p className="text-xs text-gray-600">Kelas dan pelajaran aktif</p>
+            </div>
+          </div>
+      </div>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           icon={Users}

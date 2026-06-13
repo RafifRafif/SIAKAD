@@ -66,6 +66,7 @@ const menuItems: Record<StaticDashboardRole, MenuItem[]> = {
     { icon: LayoutDashboard, label: 'Dashboard', path: '/siswa' },
     { icon: FileText, label: 'Nilai Saya', path: '/siswa/nilai' },
     { icon: ClipboardList, label: 'Presensi Saya', path: '/siswa/presensi' },
+    { icon: BookOpen, label: "Rekap Al-Qur'an", path: '/siswa/quran' },
   ],
 };
 
@@ -92,8 +93,10 @@ const getGuruMenuItems = (guruAccess: GuruAccess[]): MenuItem[] => {
       label: 'Guru Mapel',
       children: [
         { label: 'Presensi Kelas', path: '/guru/presensi' },
-        { label: 'Rekap Absensi', path: '/guru/rekap-absensi' },
-        { label: 'Input Nilai', path: '/guru/nilai' },
+        { label: 'Rekap Presensi', path: '/guru/rekap-absensi' },
+        { label: 'Input Nilai Akhir', path: '/guru/nilai' },
+        { label: 'Input Nilai Harian dan Quiz', path: '/guru/nilai-harian' },
+        { label: 'Rekap Nilai Harian dan Quiz', path: '/guru/nilai-harian-quiz' },
         { label: "Setoran Al-Qur'an", path: '/guru/quran' },
         { label: 'Riwayat Setoran', path: '/guru/riwayat-quran' },
       ],

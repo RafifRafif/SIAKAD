@@ -30,6 +30,7 @@ const SiswaGradeChart = dynamic(() => import('./SiswaGradeChart'), {
 });
 
 export default function SiswaDashboard() {
+  const [displayName, setDisplayName] = useState('Siswa');
   const [grades, setGrades] = useState<StudentGradeItem[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecordItem[]>([]);
   const [quranSubmissions, setQuranSubmissions] = useState<QuranSubmissionItem[]>([]);
@@ -46,6 +47,7 @@ export default function SiswaDashboard() {
       const session = await getAuthSession();
       const nis = session?.username;
       const params = nis ? { nis } : {};
+      setDisplayName(session?.displayName ?? 'Siswa');
 
       const [gradeItems, attendanceItems, quranItems, assignmentItems, insightItems] = await Promise.all([
         getGrades(params),
@@ -67,6 +69,7 @@ export default function SiswaDashboard() {
       setAttendanceRecords([]);
       setQuranSubmissions([]);
       setAssignments([]);
+      setDisplayName('Siswa');
       setInsights({ rank: null, classSize: 0, notes: [], achievements: [] });
     });
   }, []);
@@ -93,11 +96,34 @@ export default function SiswaDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Selamat Datang!
-        </h2>
-        <p className="text-gray-600">Pantau perkembangan akademikmu di sini</p>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-6 border-l-4 border-[#2563EB] p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-wide text-[#2563EB]">
+              Dashboard Siswa
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-gray-900">
+              Selamat Datang, {displayName}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-gray-600">
+              Pantau nilai, presensi, jadwal, dan progres Al-Qur'an dengan tampilan yang ringkas.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-medium text-blue-700">Rata-rata Nilai</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {averageGrade ? averageGrade.toFixed(2) : '0'}
+              </p>
+            </div>
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
+              <p className="text-xs font-medium text-emerald-700">Presensi Bulan Ini</p>
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {attendancePercent.toFixed(1)}%
+              </p>
+            </div>
+          </div>
+      </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

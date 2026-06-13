@@ -48,11 +48,18 @@ const dayFromDate = (value?: string | null) => {
   return String(date.getDate()).padStart(2, '0');
 };
 
+const extractCapaianPembelajaran = (value?: string | null) => {
+  const match = value?.match(/Capaian Pembelajaran:\s*([\s\S]*)/i);
+
+  return match?.[1]?.trim() || '';
+};
+
 export default function RekapAbsensiGuruMapel() {
   const [records, setRecords] = useState<AttendanceRecordItem[]>([]);
   const [selectedBulan, setSelectedBulan] = useState('');
   const [selectedKelas, setSelectedKelas] = useState('');
   const [selectedMapel, setSelectedMapel] = useState('');
+  const [selectedTanggalCapaian, setSelectedTanggalCapaian] = useState('');
 
   useEffect(() => {
     const loadRecords = async () => {
@@ -135,12 +142,51 @@ export default function RekapAbsensiGuruMapel() {
   const totalAlpha = statusTerisi.filter((status) => status === 'A').length;
   const totalSakit = statusTerisi.filter((status) => status === 'S').length;
   const totalIzin = statusTerisi.filter((status) => status === 'I').length;
+  const capaianPembelajaranItems = useMemo(
+    () => {
+      const items = new Map<string, { tanggal?: string | null; capaian: string }>();
+
+      filteredRecords.forEach((record) => {
+        const capaian = extractCapaianPembelajaran(record.keterangan);
+
+        if (capaian) {
+          items.set(`${record.tanggal}-${record.mapel}`, {
+            tanggal: record.tanggal,
+            capaian,
+          });
+        }
+      });
+
+      return Array.from(items.values());
+    },
+    [filteredRecords]
+  );
+  const capaianByDay = useMemo(() => {
+    const items: Record<string, { tanggal?: string | null; capaian: string }> = {};
+
+    capaianPembelajaranItems.forEach((item) => {
+      const day = dayFromDate(item.tanggal);
+
+      if (day) {
+        items[day] = item;
+      }
+    });
+
+    return items;
+  }, [capaianPembelajaranItems]);
+  const selectedCapaian = selectedTanggalCapaian
+    ? capaianByDay[selectedTanggalCapaian]?.capaian ?? ''
+    : '';
+
+  useEffect(() => {
+    setSelectedTanggalCapaian('');
+  }, [selectedBulan, selectedKelas, selectedMapel]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Rekap Absensi</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Rekap Presensi</h2>
           <p className="mt-1 text-gray-600">
             Lihat rangkuman presensi siswa untuk mata pelajaran yang diampu
           </p>
@@ -227,6 +273,17 @@ export default function RekapAbsensiGuruMapel() {
           </div>
         </div>
 
+        {hasSelectedFilters && selectedTanggalCapaian && (
+          <div className="border-b border-gray-200 bg-blue-50 px-6 py-4">
+            <h4 className="text-sm font-semibold text-gray-900">Capaian Pembelajaran</h4>
+            <div className="mt-3 rounded-lg bg-white px-4 py-3 text-sm text-gray-700">
+              <span className="font-medium text-gray-900">Tanggal {selectedTanggalCapaian}</span>
+              <span className="mx-2 text-gray-400">-</span>
+              <span>{selectedCapaian || 'Belum ada capaian pembelajaran untuk tanggal ini.'}</span>
+            </div>
+          </div>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1120px]">
             <thead className="border-b border-gray-200 bg-gray-50">
@@ -239,7 +296,20 @@ export default function RekapAbsensiGuruMapel() {
                     key={tanggal}
                     className="w-12 px-2 py-4 text-center text-xs font-semibold uppercase text-gray-600"
                   >
-                    {tanggal}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTanggalCapaian(tanggal)}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                        selectedTanggalCapaian === tanggal
+                          ? 'bg-[#2563EB] text-white'
+                          : capaianByDay[tanggal]
+                          ? 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'
+                          : 'hover:bg-gray-100'
+                      }`}
+                      title="Lihat capaian pembelajaran"
+                    >
+                      {tanggal}
+                    </button>
                   </th>
                 ))}
                 <th className="w-20 px-3 py-4 text-center text-xs font-semibold uppercase text-gray-600">Total Hadir</th>
@@ -255,7 +325,7 @@ export default function RekapAbsensiGuruMapel() {
                     colSpan={3 + tanggalPresensi.length + 4}
                     className="px-4 py-8 text-center text-sm text-gray-500"
                   >
-                    Pilih bulan, kelas, dan mata pelajaran terlebih dahulu untuk menampilkan rekap absensi.
+                    Pilih bulan, kelas, dan mata pelajaran terlebih dahulu untuk menampilkan rekap presensi.
                   </td>
                 </tr>
               )}

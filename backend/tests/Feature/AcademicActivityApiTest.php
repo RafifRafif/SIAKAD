@@ -262,6 +262,60 @@ class AcademicActivityApiTest extends TestCase
         );
     }
 
+    public function test_siswa_can_only_read_their_own_quran_submissions(): void
+    {
+        $siswa = User::factory()->create([
+            'username' => 'SIS001',
+            'roles' => [User::ROLE_SISWA],
+        ]);
+
+        QuranSubmission::query()->create([
+            'nis' => 'SIS001',
+            'nama' => 'Siswa Satu',
+            'kelas' => '7A',
+            'tanggal' => '2026-05-02',
+            'surah' => 'Al-Baqarah',
+            'ayat_mulai' => 1,
+            'ayat_selesai' => 10,
+            'penilaian' => 'Lancar',
+            'progress_juz' => 2,
+            'guru' => 'Guru Test',
+        ]);
+
+        QuranSubmission::query()->create([
+            'nis' => 'SIS002',
+            'nama' => 'Siswa Dua',
+            'kelas' => '7A',
+            'tanggal' => '2026-05-03',
+            'surah' => 'Ali Imran',
+            'ayat_mulai' => 1,
+            'ayat_selesai' => 8,
+            'penilaian' => 'Kurang Lancar',
+            'progress_juz' => 1,
+            'guru' => 'Guru Test',
+        ]);
+
+        $this->actingAs($siswa)
+            ->getJson('/api/quran-submissions')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.nis', 'SIS001')
+            ->assertJsonPath('0.surah', 'Al-Baqarah');
+
+        $this->actingAs($siswa)
+            ->getJson('/api/quran-submissions?nis=SIS002')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.nis', 'SIS001');
+
+        $this->actingAs($siswa)
+            ->getJson('/api/dashboard-summary')
+            ->assertOk()
+            ->assertJsonCount(1, 'siswa.quranTerbaru')
+            ->assertJsonPath('siswa.quranTerbaru.0.nis', 'SIS001')
+            ->assertJsonPath('guru.setoranQuran', 1);
+    }
+
     public function test_guru_name_is_inferred_when_guru_user_inputs_grade_and_attendance(): void
     {
         Teacher::query()->create([

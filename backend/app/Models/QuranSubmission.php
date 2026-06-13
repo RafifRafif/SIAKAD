@@ -17,6 +17,7 @@ class QuranSubmission extends Model
         'ayat_selesai',
         'penilaian',
         'keterangan',
+        'foto_setoran',
         'progress_juz',
         'guru',
     ];
@@ -46,6 +47,7 @@ class QuranSubmission extends Model
             'penilaian' => $this->penilaian,
             'nilai' => $this->penilaian,
             'keterangan' => $this->keterangan,
+            'fotoSetoran' => $this->foto_setoran,
             'progress' => $this->progress_juz,
             'guru' => $this->guru,
         ];

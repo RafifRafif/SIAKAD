@@ -38,6 +38,18 @@ const statusDisplay = {
   },
 } as const;
 
+const extractCapaianPembelajaran = (value?: string | null) => {
+  const match = value?.match(/Capaian Pembelajaran:\s*([\s\S]*)/i);
+
+  return match?.[1]?.trim() || '-';
+};
+
+const extractKeteranganPresensi = (value?: string | null) => {
+  const keterangan = value?.replace(/Capaian Pembelajaran:\s*[\s\S]*/i, '').trim();
+
+  return keterangan || '-';
+};
+
 export default function PresensiSiswa() {
   const [presensiData, setPresensiData] = useState<AttendanceRecordItem[]>([]);
 
@@ -140,6 +152,9 @@ export default function PresensiSiswa() {
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
                   Keterangan
                 </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
+                  Capaian Pembelajaran
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -164,7 +179,10 @@ export default function PresensiSiswa() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {item.keterangan || '-'}
+                      {extractKeteranganPresensi(item.keterangan)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {extractCapaianPembelajaran(item.keterangan)}
                     </td>
                   </motion.tr>
                 );
