@@ -1,5 +1,10 @@
 {
   "pages": {
+    "/api/[...path]/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/[...path]/route.js"
+    ],
     "/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -16,11 +21,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/login/page.js"
     ],
-    "/api/[...path]/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/[...path]/route.js"
-    ],
     "/admin/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -30,51 +30,6 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/admin/page.js"
-    ],
-    "/admin/tahun-ajaran/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/tahun-ajaran/page.js"
-    ],
-    "/admin/guru/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/guru/page.js"
-    ],
-    "/admin/kelas/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/kelas/page.js"
-    ],
-    "/admin/data-pelajaran/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/data-pelajaran/page.js"
-    ],
-    "/admin/pelajaran/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/pelajaran/page.js"
-    ],
-    "/admin/siswa/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/siswa/page.js"
-    ],
-    "/guru/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/layout.js"
-    ],
-    "/guru/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/page.js"
-    ],
-    "/guru/presensi/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/presensi/page.js"
     ],
     "/siswa/layout": [
       "static/chunks/webpack.js",
@@ -86,10 +41,25 @@
       "static/chunks/main-app.js",
       "static/chunks/app/siswa/page.js"
     ],
-    "/siswa/presensi/page": [
+    "/guru/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/siswa/presensi/page.js"
+      "static/chunks/app/guru/layout.js"
+    ],
+    "/guru/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/page.js"
+    ],
+    "/guru/nilai/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/nilai/page.js"
+    ],
+    "/guru/rekap-nilai/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/rekap-nilai/page.js"
     ]
   }
 }
