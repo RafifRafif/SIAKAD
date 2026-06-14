@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, Upload, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
+import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
+import { PaginationControls } from '../../components/dashboard/PaginationControls';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
 import { defaultGuruData, type GuruItem as Guru } from '../../lib/guruStore';
@@ -29,6 +31,8 @@ export default function DataGuruPage() {
   const [editingGuru, setEditingGuru] = useState<Guru | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -71,6 +75,19 @@ export default function DataGuruPage() {
       filterTahunAjaran !== '' && g.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesTahunAjaran;
   });
+  const totalPages = Math.ceil(filteredGuru.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedGuru = filteredGuru.slice(startIndex, startIndex + itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTahunAjaran, searchQuery]);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleAdd = () => {
     setEditingGuru(null);
@@ -165,14 +182,12 @@ export default function DataGuruPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus data guru ini?')) {
-      try {
-        await apiDelete(`/api/teachers/${id}`);
-        setGuru((current) => current.filter((g) => g.id !== id));
-        showToast('Data guru berhasil dihapus!', 'success');
-      } catch {
-        showToast('Gagal menghapus data guru.', 'error');
-      }
+    try {
+      await apiDelete(`/api/teachers/${id}`);
+      setGuru((current) => current.filter((g) => g.id !== id));
+      showToast('Data guru berhasil dihapus!', 'success');
+    } catch {
+      showToast('Gagal menghapus data guru.', 'error');
     }
   };
 
@@ -315,92 +330,105 @@ export default function DataGuruPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                    NIP
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Nama
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Akses
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Kontak
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredGuru.map((g) => (
-                  <motion.tr
-                    key={g.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{g.nip}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{g.nama}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <div className="flex flex-wrap gap-2">
-                        {g.role.map((role) => (
-                          <span
-                            key={role}
-                            className={`px-3 py-1 rounded-full font-medium ${
-                              role === 'Wali Kelas'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-indigo-100 text-indigo-700'
-                            }`}
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
+                      NIP
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Nama
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Akses
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Kontak
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase">
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedGuru.map((g) => (
+                    <motion.tr
+                      key={g.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{g.nip}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{g.nama}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <div className="flex flex-wrap gap-2">
+                          {g.role.map((role) => (
+                            <span
+                              key={role}
+                              className={`px-3 py-1 rounded-full font-medium ${
+                                role === 'Wali Kelas'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-indigo-100 text-indigo-700'
+                              }`}
+                            >
+                              {role}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        <div>{g.email}</div>
+                        <div className="text-xs text-gray-500">{g.telepon}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <span
+                          className={`px-3 py-1 rounded-full font-medium ${
+                            g.status === 'Aktif'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}
+                        >
+                          {g.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleEdit(g)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           >
-                            {role}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      <div>{g.email}</div>
-                      <div className="text-xs text-gray-500">{g.telepon}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`px-3 py-1 rounded-full font-medium ${
-                          g.status === 'Aktif'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-yellow-100 text-yellow-700'
-                        }`}
-                      >
-                        {g.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(g)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(g.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                            <Edit size={18} />
+                          </button>
+                          <DeleteConfirmationDialog
+                            title="Hapus Data Guru?"
+                            description="Data guru akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
+                            itemName={`${g.nama} (${g.nip})`}
+                            onConfirm={() => handleDelete(g.id)}
+                          >
+                            <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                              <Trash2 size={18} />
+                            </button>
+                          </DeleteConfirmationDialog>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <PaginationControls
+              currentPage={currentPage}
+              totalItems={filteredGuru.length}
+              itemsPerPage={itemsPerPage}
+              itemLabel="guru"
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </div>
 

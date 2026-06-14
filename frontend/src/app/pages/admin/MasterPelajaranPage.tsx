@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, BookOpen } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
+import { PaginationControls } from '../../components/dashboard/PaginationControls';
 import { Toast, useToast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
 import {
@@ -27,6 +29,8 @@ export default function MasterPelajaranPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingPelajaran, setEditingPelajaran] = useState<MasterPelajaran | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [formData, setFormData] = useState({
     nama: '',
     tahunAjaran: '',
@@ -60,6 +64,19 @@ export default function MasterPelajaranPage() {
       filterTahunAjaran !== '' &&
       item.tahunAjaran === filterTahunAjaran
   );
+  const totalPages = Math.ceil(filteredPelajaran.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedPelajaran = filteredPelajaran.slice(startIndex, startIndex + itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTahunAjaran, searchQuery]);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleAdd = () => {
     setEditingPelajaran(null);
@@ -80,14 +97,12 @@ export default function MasterPelajaranPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus data pelajaran ini?')) {
-      try {
-        await apiDelete(`/api/subjects/${id}`);
-        setPelajaran((current) => current.filter((item) => item.id !== id));
-        showToast('Data pelajaran berhasil dihapus!', 'success');
-      } catch {
-        showToast('Gagal menghapus data pelajaran.', 'error');
-      }
+    try {
+      await apiDelete(`/api/subjects/${id}`);
+      setPelajaran((current) => current.filter((item) => item.id !== id));
+      showToast('Data pelajaran berhasil dihapus!', 'success');
+    } catch {
+      showToast('Gagal menghapus data pelajaran.', 'error');
     }
   };
 
@@ -213,51 +228,64 @@ export default function MasterPelajaranPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">
-                    Nama Pelajaran
-                  </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-gray-600">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredPelajaran.map((item) => (
-                  <motion.tr
-                    key={item.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="transition-colors hover:bg-gray-50"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{item.nama}</div>
-                      <div className="text-xs text-gray-500">{item.tahunAjaran}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-gray-200 bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">
+                      Nama Pelajaran
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-gray-600">
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedPelajaran.map((item) => (
+                    <motion.tr
+                      key={item.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="transition-colors hover:bg-gray-50"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{item.nama}</div>
+                        <div className="text-xs text-gray-500">{item.tahunAjaran}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <DeleteConfirmationDialog
+                            title="Hapus Data Pelajaran?"
+                            description="Data pelajaran akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
+                            itemName={`${item.nama} - ${item.tahunAjaran}`}
+                            onConfirm={() => handleDelete(item.id)}
+                          >
+                            <button className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50">
+                              <Trash2 size={18} />
+                            </button>
+                          </DeleteConfirmationDialog>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <PaginationControls
+              currentPage={currentPage}
+              totalItems={filteredPelajaran.length}
+              itemsPerPage={itemsPerPage}
+              itemLabel="pelajaran"
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </div>
 

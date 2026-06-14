@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, BookOpen } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
+import { PaginationControls } from '../../components/dashboard/PaginationControls';
 import { Toast, useToast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
 import {
@@ -45,6 +47,8 @@ export default function DataPelajaranPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingPelajaran, setEditingPelajaran] = useState<Pelajaran | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -103,6 +107,19 @@ export default function DataPelajaranPage() {
   const filteredByTahunAjaran = filteredPelajaran.filter(
     (item) => filterTahunAjaran !== '' && item.tahunAjaran === filterTahunAjaran
   );
+  const totalPages = Math.ceil(filteredByTahunAjaran.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedPelajaran = filteredByTahunAjaran.slice(startIndex, startIndex + itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTahunAjaran, searchQuery]);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleAdd = () => {
     setEditingPelajaran(null);
@@ -129,14 +146,12 @@ export default function DataPelajaranPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus data pembelajaran ini?')) {
-      try {
-        await apiDelete(`/api/learning-assignments/${id}`);
-        setPelajaran((current) => current.filter((item) => item.id !== id));
-        showToast('Data pembelajaran berhasil dihapus!', 'success');
-      } catch {
-        showToast('Gagal menghapus data pembelajaran.', 'error');
-      }
+    try {
+      await apiDelete(`/api/learning-assignments/${id}`);
+      setPelajaran((current) => current.filter((item) => item.id !== id));
+      showToast('Data pembelajaran berhasil dihapus!', 'success');
+    } catch {
+      showToast('Gagal menghapus data pembelajaran.', 'error');
     }
   };
 
@@ -246,58 +261,71 @@ export default function DataPelajaranPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Pelajaran</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Guru Pengampu</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelas</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelompok</th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-gray-600">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredByTahunAjaran.map((item) => (
-                  <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="transition-colors hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{item.nama}</div>
-                      <div className="text-xs text-gray-500">{item.tahunAjaran}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.guruPengampu}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.kelas}</td>
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`rounded-full px-3 py-1 font-medium ${
-                          item.kelompok === 'Ikhwan'
-                            ? 'bg-sky-100 text-sky-700'
-                            : 'bg-pink-100 text-pink-700'
-                        }`}
-                      >
-                        {item.kelompok}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-gray-200 bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Pelajaran</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Guru Pengampu</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelas</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelompok</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-gray-600">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedPelajaran.map((item) => (
+                    <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="transition-colors hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{item.nama}</div>
+                        <div className="text-xs text-gray-500">{item.tahunAjaran}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{item.guruPengampu}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{item.kelas}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <span
+                          className={`rounded-full px-3 py-1 font-medium ${
+                            item.kelompok === 'Ikhwan'
+                              ? 'bg-sky-100 text-sky-700'
+                              : 'bg-pink-100 text-pink-700'
+                          }`}
                         >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          {item.kelompok}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <DeleteConfirmationDialog
+                            title="Hapus Data Pembelajaran?"
+                            description="Data pembelajaran akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
+                            itemName={`${item.nama} - ${item.kelas}`}
+                            onConfirm={() => handleDelete(item.id)}
+                          >
+                            <button className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50">
+                              <Trash2 size={18} />
+                            </button>
+                          </DeleteConfirmationDialog>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <PaginationControls
+              currentPage={currentPage}
+              totalItems={filteredByTahunAjaran.length}
+              itemsPerPage={itemsPerPage}
+              itemLabel="pembelajaran"
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </div>
 

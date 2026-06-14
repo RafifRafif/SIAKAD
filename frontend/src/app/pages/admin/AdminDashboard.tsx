@@ -50,25 +50,6 @@ export default function AdminDashboard() {
               Kelola data akademik, kelas, guru, siswa, dan pembelajaran dalam satu pusat kendali.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
-            <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-blue-700">
-                <CalendarDays size={15} />
-                <span>Ringkasan Hari Ini</span>
-              </div>
-              <p className="mt-2 text-2xl font-bold text-gray-900">
-                {summary.admin.totalSiswa + summary.admin.totalGuru}
-              </p>
-              <p className="text-xs text-gray-600">Total warga sekolah terdata</p>
-            </div>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3">
-              <p className="text-xs font-medium text-emerald-700">Master Akademik</p>
-              <p className="mt-2 text-2xl font-bold text-gray-900">
-                {totalKelas + totalPelajaran}
-              </p>
-              <p className="text-xs text-gray-600">Kelas dan pelajaran aktif</p>
-            </div>
-          </div>
       </div>
       </div>
 

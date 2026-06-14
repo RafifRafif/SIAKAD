@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, Users, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
+import { PaginationControls } from '../../components/dashboard/PaginationControls';
 import { Toast, useToast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '../../lib/apiClient';
 import { defaultKelasData, type KelasItem as Kelas } from '../../lib/kelasStore';
@@ -31,6 +33,8 @@ export default function DataKelasPage() {
   const [editingKelas, setEditingKelas] = useState<Kelas | null>(null);
   const [selectedKelas, setSelectedKelas] = useState<Kelas | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -91,6 +95,19 @@ export default function DataKelasPage() {
       filterTahunAjaran !== '' && item.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesTahunAjaran;
   });
+  const totalPages = Math.ceil(filteredKelas.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedKelas = filteredKelas.slice(startIndex, startIndex + itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterTahunAjaran, searchQuery]);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const selectedKelasStudents = useMemo(() => {
     if (selectedKelas === null) {
@@ -136,14 +153,12 @@ export default function DataKelasPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus data kelas ini?')) {
-      try {
-        await apiDelete(`/api/school-classes/${id}`);
-        setKelas((current) => current.filter((item) => item.id !== id));
-        showToast('Data kelas berhasil dihapus!', 'success');
-      } catch {
-        showToast('Gagal menghapus data kelas.', 'error');
-      }
+    try {
+      await apiDelete(`/api/school-classes/${id}`);
+      setKelas((current) => current.filter((item) => item.id !== id));
+      showToast('Data kelas berhasil dihapus!', 'success');
+    } catch {
+      showToast('Gagal menghapus data kelas.', 'error');
     }
   };
 
@@ -254,69 +269,82 @@ export default function DataKelasPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-gray-200 bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelas</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelompok</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Wali Kelas</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Jumlah Siswa</th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-gray-600">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredKelas.map((item) => (
-                  <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="transition-colors hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{item.nama}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <span
-                        className={`rounded-full px-3 py-1 font-medium ${
-                          item.kelompok === 'Ikhwan'
-                            ? 'bg-sky-100 text-sky-700'
-                            : 'bg-pink-100 text-pink-700'
-                        }`}
-                      >
-                        {item.kelompok}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{item.waliKelas}</td>
-                    <td className="px-6 py-4 text-sm text-gray-700">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 font-medium text-blue-700">
-                        <Users size={14} />
-                        {jumlahSiswaByKelas[item.nama] ?? 0} siswa
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setSelectedKelas(item)}
-                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                          title="Lihat Siswa"
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-gray-200 bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelas</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Kelompok</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Wali Kelas</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">Jumlah Siswa</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-gray-600">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedKelas.map((item) => (
+                    <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="transition-colors hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{item.nama}</div>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <span
+                          className={`rounded-full px-3 py-1 font-medium ${
+                            item.kelompok === 'Ikhwan'
+                              ? 'bg-sky-100 text-sky-700'
+                              : 'bg-pink-100 text-pink-700'
+                          }`}
                         >
-                          <Eye size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          {item.kelompok}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{item.waliKelas}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 font-medium text-blue-700">
+                          <Users size={14} />
+                          {jumlahSiswaByKelas[item.nama] ?? 0} siswa
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setSelectedKelas(item)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Lihat Siswa"
+                          >
+                            <Eye size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="rounded-lg p-2 text-blue-600 transition-colors hover:bg-blue-50"
+                          >
+                            <Edit size={18} />
+                          </button>
+                          <DeleteConfirmationDialog
+                            title="Hapus Data Kelas?"
+                            description="Data kelas akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
+                            itemName={`${item.nama} - ${item.tahunAjaran}`}
+                            onConfirm={() => handleDelete(item.id)}
+                          >
+                            <button className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50">
+                              <Trash2 size={18} />
+                            </button>
+                          </DeleteConfirmationDialog>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <PaginationControls
+              currentPage={currentPage}
+              totalItems={filteredKelas.length}
+              itemsPerPage={itemsPerPage}
+              itemLabel="kelas"
+              onPageChange={setCurrentPage}
+            />
+          </>
         )}
       </div>
 

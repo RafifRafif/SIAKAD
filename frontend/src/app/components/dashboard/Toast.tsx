@@ -2,6 +2,13 @@ import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useEffect } from 'react';
 
+let toastIdCounter = 0;
+
+const createToastId = () => {
+  toastIdCounter += 1;
+  return Date.now() + toastIdCounter;
+};
+
 interface ToastProps {
   message: string;
   type?: 'success' | 'error' | 'info';
@@ -70,7 +77,7 @@ export function useToast() {
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>>([]);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    const id = Date.now();
+    const id = createToastId();
     setToasts((prev) => [...prev, { id, message, type }]);
   };
 

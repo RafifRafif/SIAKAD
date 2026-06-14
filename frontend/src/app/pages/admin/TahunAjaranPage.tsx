@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, CalendarRange, CheckCircle2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../../lib/apiClient';
@@ -69,14 +70,12 @@ export default function TahunAjaranPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus tahun ajaran ini?')) {
-      try {
-        await apiDelete(`/api/academic-years/${id}`);
-        setTahunAjaran((current) => current.filter((item) => item.id !== id));
-        showToast('Tahun ajaran berhasil dihapus!', 'success');
-      } catch {
-        showToast('Gagal menghapus tahun ajaran.', 'error');
-      }
+    try {
+      await apiDelete(`/api/academic-years/${id}`);
+      setTahunAjaran((current) => current.filter((item) => item.id !== id));
+      showToast('Tahun ajaran berhasil dihapus!', 'success');
+    } catch {
+      showToast('Gagal menghapus tahun ajaran.', 'error');
     }
   };
 
@@ -235,12 +234,16 @@ export default function TahunAjaranPage() {
                         >
                           <Edit size={18} />
                         </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50"
+                        <DeleteConfirmationDialog
+                          title="Hapus Tahun Ajaran?"
+                          description="Tahun ajaran akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
+                          itemName={`${item.nama} ${item.semester}`}
+                          onConfirm={() => handleDelete(item.id)}
                         >
-                          <Trash2 size={18} />
-                        </button>
+                          <button className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50">
+                            <Trash2 size={18} />
+                          </button>
+                        </DeleteConfirmationDialog>
                       </div>
                     </td>
                   </motion.tr>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Calculator, Percent, Save, Trophy } from 'lucide-react';
+import { PaginationControls } from '../../components/dashboard/PaginationControls';
 import { Toast, useToast } from '../../components/dashboard/Toast';
 import { apiGet, apiPut } from '../../lib/apiClient';
 import {
@@ -26,6 +27,9 @@ export default function BobotPenilaianPage() {
   const [gradeRanges, setGradeRanges] = useState<GradeRangeItem[]>(
     defaultBobotPenilaianConfig.gradeRanges
   );
+  const [bobotPage, setBobotPage] = useState(1);
+  const [gradePage, setGradePage] = useState(1);
+  const itemsPerPage = 10;
   const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
@@ -51,6 +55,16 @@ export default function BobotPenilaianPage() {
   const sortedGradeRanges = useMemo(
     () => [...gradeRanges].sort((a, b) => b.nilaiMinimum - a.nilaiMinimum),
     [gradeRanges]
+  );
+  const bobotStartIndex = (bobotPage - 1) * itemsPerPage;
+  const gradeStartIndex = (gradePage - 1) * itemsPerPage;
+  const paginatedBobotPenilaian = bobotPenilaian.slice(
+    bobotStartIndex,
+    bobotStartIndex + itemsPerPage
+  );
+  const paginatedGradeRanges = sortedGradeRanges.slice(
+    gradeStartIndex,
+    gradeStartIndex + itemsPerPage
   );
 
   const handleBobotChange = (id: string, value: string) => {
@@ -153,7 +167,7 @@ export default function BobotPenilaianPage() {
           </div>
 
           <div className="space-y-4">
-            {bobotPenilaian.map((item) => (
+            {paginatedBobotPenilaian.map((item) => (
               <div
                 key={item.id}
                 className="grid gap-3 rounded-xl border border-gray-200 p-4 md:grid-cols-[1fr_180px]"
@@ -180,6 +194,13 @@ export default function BobotPenilaianPage() {
               </div>
             ))}
           </div>
+          <PaginationControls
+            currentPage={bobotPage}
+            totalItems={bobotPenilaian.length}
+            itemsPerPage={itemsPerPage}
+            itemLabel="bobot"
+            onPageChange={setBobotPage}
+          />
         </div>
 
         <div className="space-y-6">
@@ -222,7 +243,7 @@ export default function BobotPenilaianPage() {
             </div>
 
             <div className="space-y-4">
-              {sortedGradeRanges.map((item) => (
+              {paginatedGradeRanges.map((item) => (
                 <div
                   key={item.id}
                   className="rounded-xl border border-gray-200 p-4"
@@ -275,6 +296,13 @@ export default function BobotPenilaianPage() {
                 </div>
               ))}
             </div>
+            <PaginationControls
+              currentPage={gradePage}
+              totalItems={sortedGradeRanges.length}
+              itemsPerPage={itemsPerPage}
+              itemLabel="grade"
+              onPageChange={setGradePage}
+            />
           </div>
         </div>
       </div>

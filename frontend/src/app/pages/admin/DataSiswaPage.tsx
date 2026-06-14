@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, Upload, Eye, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
+import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
@@ -32,7 +33,7 @@ export default function DataSiswaPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const itemsPerPage = 5;
+  const itemsPerPage = 10;
   const { toasts, showToast, removeToast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -230,14 +231,12 @@ export default function DataSiswaPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Apakah Anda yakin ingin menghapus siswa ini?')) {
-      try {
-        await apiDelete(`/api/students/${id}`);
-        setStudents((current) => current.filter((s) => s.id !== id));
-        showToast('Siswa berhasil dihapus!', 'success');
-      } catch {
-        showToast('Gagal menghapus data siswa.', 'error');
-      }
+    try {
+      await apiDelete(`/api/students/${id}`);
+      setStudents((current) => current.filter((s) => s.id !== id));
+      showToast('Siswa berhasil dihapus!', 'success');
+    } catch {
+      showToast('Gagal menghapus data siswa.', 'error');
     }
   };
 
@@ -472,12 +471,16 @@ export default function DataSiswaPage() {
                           >
                             <Edit size={18} />
                           </button>
-                          <button
-                            onClick={() => handleDelete(student.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          <DeleteConfirmationDialog
+                            title="Hapus Data Siswa?"
+                            description="Data siswa akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
+                            itemName={`${student.nama} (${student.nis})`}
+                            onConfirm={() => handleDelete(student.id)}
                           >
-                            <Trash2 size={18} />
-                          </button>
+                            <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                              <Trash2 size={18} />
+                            </button>
+                          </DeleteConfirmationDialog>
                         </div>
                       </td>
                     </motion.tr>

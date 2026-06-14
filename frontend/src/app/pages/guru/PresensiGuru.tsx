@@ -310,25 +310,25 @@ export default function PresensiGuru() {
             </select>
           </div>
         </div>
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Capaian Pembelajaran
-          </label>
-          <textarea
-            value={capaianPembelajaran}
-            onChange={(event) => setCapaianPembelajaran(event.target.value)}
-            rows={3}
-            placeholder="Tuliskan capaian pembelajaran pada pertemuan ini"
-            className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
-          />
-        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="flex flex-col gap-4 border-b border-gray-200 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-4 border-b border-gray-200 p-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="w-full flex-1">
             <h3 className="font-semibold text-gray-900">Daftar Siswa - Kelas {selectedKelas || '-'}</h3>
-            <p className="text-sm text-gray-600 mt-1">
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Capaian Pembelajaran
+              </label>
+              <textarea
+                value={capaianPembelajaran}
+                onChange={(event) => setCapaianPembelajaran(event.target.value)}
+                rows={2}
+                placeholder="Tuliskan capaian pembelajaran pada pertemuan ini"
+                className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+              />
+            </div>
+            <p className="mt-3 text-sm font-medium text-gray-700">
               Pilih satu status presensi untuk setiap siswa
             </p>
           </div>

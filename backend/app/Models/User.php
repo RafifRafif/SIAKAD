@@ -60,7 +60,7 @@ class User extends Authenticatable
 
     public function hasRole(string $role): bool
     {
-        return in_array($role, $this->roles ?? [], true);
+        return in_array($role, $this->effectiveRoles(), true);
     }
 
     /**
@@ -68,7 +68,42 @@ class User extends Authenticatable
      */
     public function hasAnyRole(array $roles): bool
     {
-        return count(array_intersect($this->roles ?? [], $roles)) > 0;
+        return count(array_intersect($this->effectiveRoles(), $roles)) > 0;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function effectiveRoles(): array
+    {
+        $storedRoles = $this->roles ?? [];
+
+        if (in_array(self::ROLE_ADMIN, $storedRoles, true)) {
+            return $storedRoles;
+        }
+
+        $teacher = Teacher::query()->where('nip', $this->username)->first();
+
+        if ($teacher !== null) {
+            $roles = [];
+            $teacherRoles = $teacher->roles ?? [];
+
+            if (in_array('Guru Mapel', $teacherRoles, true)) {
+                $roles[] = self::ROLE_GURU_MAPEL;
+            }
+
+            if (in_array('Wali Kelas', $teacherRoles, true)) {
+                $roles[] = self::ROLE_WALI_KELAS;
+            }
+
+            return $roles;
+        }
+
+        if ($this->isLinkedStudentAccount()) {
+            return [self::ROLE_SISWA];
+        }
+
+        return $storedRoles;
     }
 
     public function dashboardPath(): string
