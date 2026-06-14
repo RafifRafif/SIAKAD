@@ -172,13 +172,7 @@ export default function MasterPelajaranPage() {
         />
       ))}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Data Pelajaran</h2>
-          <p className="mt-1 text-gray-600">
-            Kelola master nama pelajaran yang dipakai di data pembelajaran
-          </p>
-        </div>
+      <div className="flex justify-end">
         <button
           onClick={handleAdd}
           className="flex items-center gap-2 rounded-lg bg-[#2563EB] px-6 py-3 font-medium text-white shadow-md transition-all hover:bg-blue-700"

@@ -11,9 +11,12 @@ import {
   FileText,
   BookOpen,
   FolderTree,
+  GraduationCap,
   UserCircle,
   LogOut,
   Menu,
+  School,
+  Users,
   X,
   ChevronDown,
 } from 'lucide-react';
@@ -40,6 +43,7 @@ interface MenuItem {
   label: string;
   path?: string;
   children?: Array<{
+    icon?: typeof LayoutDashboard;
     label: string;
     path: string;
   }>;
@@ -53,14 +57,14 @@ const menuItems: Record<StaticDashboardRole, MenuItem[]> = {
       icon: FolderTree,
       label: 'Manajemen Data',
       children: [
-        { label: 'Data Guru', path: '/admin/guru' },
-        { label: 'Data Kelas', path: '/admin/kelas' },
-        { label: 'Data Pelajaran', path: '/admin/data-pelajaran' },
-        { label: 'Data Pembelajaran', path: '/admin/pelajaran' },
-        { label: 'Data Siswa', path: '/admin/siswa' },
-        { label: 'Bobot Penilaian', path: '/admin/bobot-penilaian' },
+        { icon: Users, label: 'Data Guru', path: '/admin/guru' },
+        { icon: School, label: 'Data Kelas', path: '/admin/kelas' },
+        { icon: BookOpen, label: 'Data Pelajaran', path: '/admin/data-pelajaran' },
+        { icon: GraduationCap, label: 'Data Pembelajaran', path: '/admin/pelajaran' },
+        { icon: Users, label: 'Data Siswa', path: '/admin/siswa' },
       ],
     },
+    { icon: ClipboardList, label: 'Bobot Penilaian', path: '/admin/bobot-penilaian' },
   ],
   siswa: [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/siswa' },
@@ -112,6 +116,17 @@ const roleNames = {
   siswa: 'Siswa',
 };
 
+const adminPageDescriptions: Record<string, string> = {
+  '/admin': 'Ringkasan aktivitas sekolah hari ini',
+  '/admin/tahun-ajaran': 'Kelola periode akademik aktif, draft, dan arsip',
+  '/admin/guru': 'Kelola data guru dan akses fitur yang diberikan',
+  '/admin/kelas': 'Kelola daftar kelas, wali kelas, dan kapasitas siswa',
+  '/admin/data-pelajaran': 'Kelola master nama pelajaran yang dipakai di data pembelajaran',
+  '/admin/pelajaran': 'Kelola daftar pembelajaran, pengampu, kelas, dan kelompok',
+  '/admin/siswa': 'Kelola data siswa sekolah',
+  '/admin/bobot-penilaian': 'Atur komposisi nilai dan rentang grade yang dipakai guru mata pelajaran',
+};
+
 export default function DashboardLayout({ role, children }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -128,6 +143,10 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
   const profilePhotoUrlRef = useRef<string | null>(null);
   const photoLoadRequestRef = useRef(0);
   const currentPath = pathname ?? '/';
+  const isAdminLayout = role === 'admin';
+  const showAdminPageHeader = isAdminLayout && currentPath !== '/admin/profile';
+  const adminPageDescription =
+    adminPageDescriptions[currentPath] ?? 'Kelola data akademik SMA IT Ulil Albab';
   const currentMenu = useMemo(
     () => (role === 'guru' ? getGuruMenuItems(guruAccess) : menuItems[role]),
     [guruAccess, role]
@@ -277,7 +296,7 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
               }`}
             >
               <div className="flex items-center gap-3">
-                <Icon size={20} />
+                <Icon size={isAdminLayout ? 22 : 20} />
                 <span className="text-sm font-medium">{item.label}</span>
               </div>
               <ChevronDown
@@ -287,9 +306,10 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
             </button>
 
             {isExpanded && (
-              <div className="ml-4 space-y-1 border-l border-gray-200 pl-3">
+              <div className={`${isAdminLayout ? 'ml-6 space-y-2 border-l border-blue-100 pl-5' : 'ml-4 space-y-1 border-l border-gray-200 pl-3'}`}>
                 {item.children.map((child) => {
                   const isChildActive = currentPath === child.path;
+                  const ChildIcon = child.icon;
                   return (
                     <Link
                       key={child.path}
@@ -299,12 +319,15 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
                           setIsSidebarOpen(false);
                         }
                       }}
-                      className={`flex w-full items-center rounded-lg px-4 py-2.5 text-sm transition-all ${
+                      className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm transition-all ${
                         isChildActive
                           ? 'bg-[#2563EB] font-medium text-white shadow-md'
+                          : isAdminLayout
+                          ? 'font-medium text-[#26365f] hover:bg-blue-50 hover:text-[#2563EB]'
                           : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                       }`}
                     >
+                      {ChildIcon && <ChildIcon size={17} />}
                       {child.label}
                     </Link>
                   );
@@ -326,30 +349,48 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
           }}
           className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 transition-all ${
             isActive
-              ? 'bg-[#2563EB] text-white shadow-md'
+              ? isAdminLayout
+                ? 'bg-gradient-to-r from-[#2563EB] to-[#0057ff] text-white shadow-[0_14px_30px_rgba(37,99,235,0.25)]'
+                : 'bg-[#2563EB] text-white shadow-md'
+              : isAdminLayout
+              ? 'font-semibold text-[#111b45] hover:bg-blue-50 hover:text-[#2563EB]'
               : 'text-gray-700 hover:bg-gray-100'
           }`}
         >
-          <Icon size={20} />
+          <Icon size={isAdminLayout ? 22 : 20} />
           <span className="text-sm font-medium">{item.label}</span>
         </Link>
       );
     });
 
   return (
-    <div className="min-h-screen bg-gray-50 font-['Poppins',sans-serif]">
-      <aside className="hidden border-r border-gray-200 bg-white lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-grow flex-col overflow-y-auto pt-5 pb-4">
-          <div className="mb-8 flex items-center gap-3 px-6">
-            <Image src="/logo.png" alt="Logo" width={48} height={48} className="h-12 w-12" />
+    <div className={`min-h-screen font-['Poppins',sans-serif] ${isAdminLayout ? 'bg-[#f7faff]' : 'bg-gray-50'}`}>
+      <aside
+        className={`hidden bg-white lg:fixed lg:flex lg:flex-col ${
+          isAdminLayout
+            ? 'lg:inset-y-0 lg:left-0 lg:w-64 border-r border-blue-50 shadow-[0_18px_45px_rgba(15,23,42,0.06)]'
+            : 'border-r border-gray-200 lg:inset-y-0 lg:w-64'
+        }`}
+      >
+        <div className={`flex flex-grow flex-col overflow-y-auto ${isAdminLayout ? 'pt-5 pb-4' : 'pt-5 pb-4'}`}>
+          <div className={`flex items-center gap-3 ${isAdminLayout ? 'mb-8 px-6' : 'mb-8 px-6'}`}>
+            <Image
+              src="/logo.png"
+              alt="Logo"
+              width={48}
+              height={48}
+              className="h-12 w-12"
+            />
             <div>
-              <div className="text-sm font-semibold leading-tight text-[#2563EB]">
+              <div className={`${isAdminLayout ? 'text-sm' : 'text-sm'} font-semibold leading-tight text-[#2563EB]`}>
                 SMA IT Ulil Albab
               </div>
               <div className="text-xs text-gray-600">{displayRole}</div>
             </div>
           </div>
-          <nav className="flex-1 space-y-1 px-4">{renderMenuItems()}</nav>
+          <nav className={`${isAdminLayout ? 'flex-1 space-y-1 px-4' : 'flex-1 space-y-1 px-4'}`}>
+            {renderMenuItems()}
+          </nav>
         </div>
       </aside>
 
@@ -387,8 +428,14 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
         </>
       )}
 
-      <div className="flex min-h-screen flex-col lg:pl-64">
-        <header className="sticky top-0 z-30 border-b border-gray-200 bg-white px-4 py-4 sm:px-6 lg:px-8">
+      <div className={`flex min-h-screen flex-col ${isAdminLayout ? 'lg:pl-64' : 'lg:pl-64'}`}>
+        <header
+          className={
+            isAdminLayout
+              ? 'relative z-30 bg-transparent px-4 pt-8 pb-4 sm:px-6 lg:px-8'
+              : 'sticky top-0 z-30 border-b border-gray-200 bg-white px-4 py-4 sm:px-6 lg:px-8'
+          }
+        >
           <div className="flex items-center justify-between">
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -396,15 +443,26 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
             >
               <Menu size={24} />
             </button>
-            <div className="hidden lg:block">
-              <h1 className="text-xl font-semibold text-gray-900">{getCurrentPageTitle()}</h1>
+            <div className={showAdminPageHeader ? 'block' : isAdminLayout ? 'hidden' : 'hidden lg:block'}>
+              <h1 className={isAdminLayout ? 'text-2xl font-bold text-[#08173f]' : 'text-xl font-semibold text-gray-900'}>
+                {getCurrentPageTitle()}
+              </h1>
+              {showAdminPageHeader && (
+                <p className="mt-1 text-sm font-medium text-[#526083]">
+                  {adminPageDescription}
+                </p>
+              )}
             </div>
             <div className="relative ml-auto">
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="flex items-center gap-3 rounded-lg px-4 py-2 transition-colors hover:bg-gray-100"
+                className={`flex items-center gap-3 px-4 py-2 transition-colors ${
+                  isAdminLayout ? 'rounded-xl hover:bg-white/70' : 'rounded-lg hover:bg-gray-100'
+                }`}
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#2563EB] to-blue-400 font-semibold text-white">
+                <div className={`flex items-center justify-center rounded-full bg-gradient-to-br from-[#2563EB] to-blue-500 font-semibold text-white ${
+                  isAdminLayout ? 'h-10 w-10 shadow-[0_10px_24px_rgba(37,99,235,0.22)]' : 'h-10 w-10'
+                }`}>
                   {profilePhoto ? (
                     <img
                       src={profilePhoto}
@@ -416,10 +474,10 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
                   )}
                 </div>
                 <div className="hidden text-left sm:block">
-                  <div className="text-sm font-semibold text-gray-900">
+                  <div className={`${isAdminLayout ? 'text-sm text-[#111b45]' : 'text-sm text-gray-900'} font-semibold`}>
                     {displayName || displayRole}
                   </div>
-                  <div className="text-xs text-gray-600">View Profile</div>
+                  <div className={`${isAdminLayout ? 'text-xs text-[#526083]' : 'text-xs text-gray-600'}`}>View Profile</div>
                 </div>
                 <ChevronDown size={16} className="text-gray-600" />
               </button>
@@ -458,7 +516,9 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
             </div>
           </div>
         </header>
-        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+        <main className={isAdminLayout ? 'flex-1 px-4 pb-8 sm:px-6 lg:px-8' : 'flex-1 px-4 py-8 sm:px-6 lg:px-8'}>
+          {children}
+        </main>
       </div>
     </div>
   );

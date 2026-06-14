@@ -264,11 +264,7 @@ export default function DataGuruPage() {
         />
       ))}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Data Guru</h2>
-          <p className="text-gray-600 mt-1">Kelola data guru dan akses fitur yang diberikan</p>
-        </div>
+      <div className="flex justify-end">
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
             onClick={handleImport}

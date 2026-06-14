@@ -136,13 +136,7 @@ export default function BobotPenilaianPage() {
         />
       ))}
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Bobot Penilaian</h2>
-          <p className="mt-1 text-gray-600">
-            Atur komposisi nilai dan rentang grade yang dipakai guru mata pelajaran.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <button
           onClick={handleSave}
           className="flex items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-6 py-3 font-medium text-white shadow-md transition-all hover:bg-blue-700"

@@ -1,4 +1,10 @@
 
 > siakad-frontend@0.0.1 dev
-> next dev --turbopack --port 3000
+> next dev --port 3000
 
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.56.1:3000
+
+ ✓ Starting...
+ ✓ Ready in 2s
