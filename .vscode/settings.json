@@ -1,29 +1,42 @@
-{
-  "explorer.openEditors.visible": 0,
-  "files.exclude": {
-    "SIAKAD": true,
-    ".next": true,
-    "frontend-dev.err.log": true,
-    "frontend-dev.log": true,
-    "next-env.d.ts": true,
-    "next.config.ts": true,
-    "package-lock.json": true,
-    "package.json": true,
-    "postcss.config.mjs": true,
-    "tsconfig.json": true,
-    "tsconfig.tsbuildinfo": true
-  },
-  "search.exclude": {
-    "SIAKAD": true,
-    ".next": true,
-    "frontend-dev.err.log": true,
-    "frontend-dev.log": true,
-    "next-env.d.ts": true,
-    "next.config.ts": true,
-    "package-lock.json": true,
-    "package.json": true,
-    "postcss.config.mjs": true,
-    "tsconfig.json": true,
-    "tsconfig.tsbuildinfo": true
-  }
+﻿{
+    "files.watcherExclude":  {
+                                 "frontend/node_modules/**":  true,
+                                 "frontend/.next/**":  true,
+                                 "frontend/.next-dev/**":  true
+                             },
+    "files.exclude":  {
+                          "package-lock.json":  true,
+                          "frontend/tsconfig.tsbuildinfo":  true,
+                          "postcss.config.mjs":  true,
+                          "next.config.ts":  true,
+                          "frontend/.next":  true,
+                          "tsconfig.tsbuildinfo":  true,
+                          "frontend/.next-dev":  true,
+                          "SIAKAD":  true,
+                          ".next":  true,
+                          "tsconfig.json":  true,
+                          "frontend-dev.err.log":  true,
+                          "frontend-dev.log":  true,
+                          "frontend/node_modules":  true,
+                          "package.json":  true,
+                          "next-env.d.ts":  true
+                      },
+    "explorer.openEditors.visible":  0,
+    "search.exclude":  {
+                           "package-lock.json":  true,
+                           "frontend/tsconfig.tsbuildinfo":  true,
+                           "postcss.config.mjs":  true,
+                           "next.config.ts":  true,
+                           "frontend/.next":  true,
+                           "tsconfig.tsbuildinfo":  true,
+                           "frontend/.next-dev":  true,
+                           "SIAKAD":  true,
+                           ".next":  true,
+                           "tsconfig.json":  true,
+                           "frontend-dev.err.log":  true,
+                           "frontend-dev.log":  true,
+                           "frontend/node_modules":  true,
+                           "package.json":  true,
+                           "next-env.d.ts":  true
+                       }
 }
