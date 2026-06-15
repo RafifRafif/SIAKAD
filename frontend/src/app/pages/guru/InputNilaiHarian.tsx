@@ -469,11 +469,7 @@ export default function InputNilaiHarian() {
         />
       ))}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Input Nilai Harian dan Quiz</h2>
-          <p className="text-gray-600 mt-1">Input nilai harian tugas dan quiz siswa</p>
-        </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
         <button
           type="button"
           onClick={() => setIsImportModalOpen(true)}

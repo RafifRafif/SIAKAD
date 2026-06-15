@@ -1,0 +1,29 @@
+{
+  "explorer.openEditors.visible": 0,
+  "files.exclude": {
+    "SIAKAD": true,
+    ".next": true,
+    "frontend-dev.err.log": true,
+    "frontend-dev.log": true,
+    "next-env.d.ts": true,
+    "next.config.ts": true,
+    "package-lock.json": true,
+    "package.json": true,
+    "postcss.config.mjs": true,
+    "tsconfig.json": true,
+    "tsconfig.tsbuildinfo": true
+  },
+  "search.exclude": {
+    "SIAKAD": true,
+    ".next": true,
+    "frontend-dev.err.log": true,
+    "frontend-dev.log": true,
+    "next-env.d.ts": true,
+    "next.config.ts": true,
+    "package-lock.json": true,
+    "package.json": true,
+    "postcss.config.mjs": true,
+    "tsconfig.json": true,
+    "tsconfig.tsbuildinfo": true
+  }
+}

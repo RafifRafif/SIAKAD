@@ -181,13 +181,7 @@ export default function RekapNilaiHarianQuiz() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Nilai Harian dan Quiz</h2>
-          <p className="mt-1 text-gray-600">
-            Rekap nilai tugas harian dan quiz siswa berdasarkan kelas, mata pelajaran, dan bulan
-          </p>
-        </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="button"

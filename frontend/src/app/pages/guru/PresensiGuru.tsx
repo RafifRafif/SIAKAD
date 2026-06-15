@@ -249,11 +249,6 @@ export default function PresensiGuru() {
         />
       ))}
 
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Input Presensi</h2>
-        <p className="text-gray-600 mt-1">Catat kehadiran siswa</p>
-      </div>
-
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
         <div className="grid md:grid-cols-3 gap-4">
           <div>

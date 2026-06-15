@@ -113,11 +113,6 @@ export default function RiwayatSetoranQuran() {
         />
       ))}
 
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Riwayat Setoran Al-Qur&apos;an</h2>
-        <p className="mt-1 text-gray-600">Lihat riwayat setoran siswa berdasarkan data backend</p>
-      </div>
-
       {previewFoto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-xl">

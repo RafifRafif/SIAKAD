@@ -5,8 +5,10 @@ import { Download } from 'lucide-react';
 import { motion } from 'motion/react';
 import { getAuthSession } from '../../lib/authStore';
 import { apiDownload, apiGet } from '../../lib/apiClient';
+import { Toast, useToast } from '../../components/dashboard/Toast';
 import {
   getGrades,
+  type LearningAssignmentItem,
   type StudentGradeItem,
 } from '../../lib/academicActivityStore';
 import {
@@ -33,25 +35,31 @@ const gradeFromAverage = (average: number) =>
 
 export default function NilaiSiswa() {
   const [grades, setGrades] = useState<StudentGradeItem[]>([]);
+  const [learningAssignments, setLearningAssignments] = useState<LearningAssignmentItem[]>([]);
   const [tahunAjaranItems, setTahunAjaranItems] = useState<TahunAjaranItem[]>([]);
   const [selectedTahunAjaran, setSelectedTahunAjaran] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
     const loadGrades = async () => {
       const session = await getAuthSession();
       const params = session?.username ? { nis: session.username } : {};
-      const [items, academicYears] = await Promise.all([
+      const [items, academicYears, assignmentItems] = await Promise.all([
         getGrades(params),
         apiGet<TahunAjaranItem[]>('/api/academic-years'),
+        apiGet<LearningAssignmentItem[]>('/api/learning-assignments'),
       ]);
 
       setGrades(items);
       setTahunAjaranItems(academicYears);
+      setLearningAssignments(assignmentItems);
     };
 
     void loadGrades().catch(() => {
       setGrades([]);
       setTahunAjaranItems([]);
+      setLearningAssignments([]);
     });
   }, []);
 
@@ -74,9 +82,19 @@ export default function NilaiSiswa() {
         }
       });
 
+      learningAssignments.forEach((assignment) => {
+        if (assignment.tahunAjaran && !optionValues.has(assignment.tahunAjaran)) {
+          options.push({
+            value: assignment.tahunAjaran,
+            label: assignment.tahunAjaran,
+          });
+          optionValues.add(assignment.tahunAjaran);
+        }
+      });
+
       return options;
     },
-    [grades, tahunAjaranItems]
+    [grades, learningAssignments, tahunAjaranItems]
   );
 
   const filteredGrades = useMemo(
@@ -96,50 +114,93 @@ export default function NilaiSiswa() {
       grouped.set(grade.mapel, current);
     });
 
-    return Array.from(grouped.entries()).map(([mapel, items]) => {
+    const kelasSiswa = filteredGrades.find((grade) => grade.kelas)?.kelas;
+    const mapelNames = new Set<string>();
+
+    learningAssignments
+      .filter((assignment) => {
+        const matchTahunAjaran = selectedTahunAjaran
+          ? assignment.tahunAjaran === selectedTahunAjaran
+          : true;
+        const matchKelas = kelasSiswa ? assignment.kelas === kelasSiswa : true;
+
+        return matchTahunAjaran && matchKelas;
+      })
+      .forEach((assignment) => mapelNames.add(assignment.nama));
+
+    grouped.forEach((_, mapel) => mapelNames.add(mapel));
+
+    return Array.from(mapelNames).sort((first, second) => first.localeCompare(second)).map((mapel) => {
+      const items = grouped.get(mapel) ?? [];
       const nilaiByJenis = (jenis: string) =>
         items.find((item) => item.jenis.toLowerCase() === jenis)?.nilai ?? null;
       const average =
-        items.reduce((total, item) => total + Number(item.nilai), 0) / items.length;
+        items.length > 0
+          ? items.reduce((total, item) => total + Number(item.nilai), 0) / items.length
+          : null;
 
       return {
         mapel,
-        tahunAjaran: items[0]?.tahunAjaran ?? '',
+        tahunAjaran: items[0]?.tahunAjaran ?? selectedTahunAjaran,
         nilai: {
           tugas: nilaiByJenis('tugas'),
           quiz: nilaiByJenis('quiz'),
           uts: nilaiByJenis('uts'),
           uas: nilaiByJenis('uas'),
-          rata: Number(average.toFixed(2)),
+          rata: average === null ? 0 : Number(average.toFixed(2)),
         },
-        grade: gradeFromAverage(average),
+        grade: average === null ? '-' : gradeFromAverage(average),
       };
     });
-  }, [filteredGrades]);
+  }, [filteredGrades, learningAssignments, selectedTahunAjaran]);
 
+  const nilaiTerisi = nilaiData.filter((item) => item.grade !== '-');
   const rataRataTotal =
-    nilaiData.length > 0
-      ? nilaiData.reduce((sum, item) => sum + item.nilai.rata, 0) / nilaiData.length
+    nilaiTerisi.length > 0
+      ? nilaiTerisi.reduce((sum, item) => sum + item.nilai.rata, 0) / nilaiTerisi.length
       : 0;
-  const gradeTotal = gradeFromAverage(rataRataTotal);
+  const gradeTotal = nilaiTerisi.length > 0 ? gradeFromAverage(rataRataTotal) : '-';
   const semesterLabel = selectedTahunAjaran || '-';
-  const handleDownloadRapor = () => {
-    void apiDownload('/api/reports/student/rapor', 'rapor-siswa.pdf');
+  const handleDownloadRapor = async () => {
+    if (isDownloading) {
+      return;
+    }
+
+    setIsDownloading(true);
+
+    try {
+      const query = selectedTahunAjaran
+        ? `?tahunAjaran=${encodeURIComponent(selectedTahunAjaran)}`
+        : '';
+
+      await apiDownload(`/api/reports/student/rapor${query}`, 'rapor-siswa.pdf');
+      showToast('Rapor berhasil didownload.', 'success');
+    } catch {
+      showToast('Gagal download rapor. Pastikan Anda sudah login sebagai siswa.', 'error');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Nilai & Rapor</h2>
-          <p className="text-gray-600 mt-1">Lihat nilai dan download rapor</p>
-        </div>
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
         <button
           onClick={handleDownloadRapor}
-          className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-all font-medium shadow-md"
+          disabled={isDownloading}
+          className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-all font-medium shadow-md disabled:cursor-not-allowed disabled:bg-gray-300"
         >
           <Download size={20} />
-          <span>Download Rapor</span>
+          <span>{isDownloading ? 'Mendownload...' : 'Download Rapor'}</span>
         </button>
       </div>
 
@@ -222,7 +283,7 @@ export default function NilaiSiswa() {
               {selectedTahunAjaran && nilaiData.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-6 py-8 text-center text-sm text-gray-500">
-                    Belum ada data nilai untuk tahun ajaran yang dipilih.
+                    Belum ada mata pelajaran untuk tahun ajaran yang dipilih.
                   </td>
                 </tr>
               )}
@@ -250,7 +311,7 @@ export default function NilaiSiswa() {
                     {item.nilai.uas ?? '-'}
                   </td>
                   <td className="px-6 py-4 text-center text-sm font-bold text-gray-900">
-                    {item.nilai.rata}
+                    {item.grade === '-' ? '-' : item.nilai.rata}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span
@@ -261,6 +322,8 @@ export default function NilaiSiswa() {
                           ? 'bg-blue-100 text-blue-700'
                           : item.grade === 'C'
                           ? 'bg-yellow-100 text-yellow-700'
+                          : item.grade === '-'
+                          ? 'bg-gray-100 text-gray-600'
                           : 'bg-red-100 text-red-700'
                       }`}
                     >
@@ -279,7 +342,13 @@ export default function NilaiSiswa() {
                   {rataRataTotal.toFixed(2)}
                 </td>
                 <td className="px-6 py-4 text-center">
-                  <span className="px-4 py-1 bg-green-100 text-green-700 rounded-full font-bold">
+                  <span
+                    className={`px-4 py-1 rounded-full font-bold ${
+                      gradeTotal === '-'
+                        ? 'bg-gray-100 text-gray-600'
+                        : 'bg-green-100 text-green-700'
+                    }`}
+                  >
                     {gradeTotal}
                   </span>
                 </td>

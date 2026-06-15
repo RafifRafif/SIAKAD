@@ -248,11 +248,6 @@ export default function ProfilePage() {
         />
       ))}
 
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Profile</h2>
-        <p className="text-gray-600 mt-1">Kelola informasi akun Anda</p>
-      </div>
-
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Profile Card */}
         <motion.div

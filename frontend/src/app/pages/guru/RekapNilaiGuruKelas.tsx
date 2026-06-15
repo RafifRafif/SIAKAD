@@ -99,13 +99,7 @@ export default function RekapNilaiGuruKelas() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Rekap Nilai</h2>
-          <p className="mt-1 text-gray-600">
-            Pantau nilai semua mata pelajaran yang diinput oleh guru mata pelajaran
-          </p>
-        </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
         <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB]">
           <FileText size={18} />
           Rekap Nilai Kelas

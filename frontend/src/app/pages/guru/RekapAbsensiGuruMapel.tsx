@@ -184,15 +184,6 @@ export default function RekapAbsensiGuruMapel() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Rekap Presensi</h2>
-          <p className="mt-1 text-gray-600">
-            Lihat rangkuman presensi siswa untuk mata pelajaran yang diampu
-          </p>
-        </div>
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

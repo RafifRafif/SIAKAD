@@ -99,6 +99,7 @@ const getGuruMenuItems = (guruAccess: GuruAccess[]): MenuItem[] => {
         { label: 'Presensi Kelas', path: '/guru/presensi' },
         { label: 'Rekap Presensi', path: '/guru/rekap-absensi' },
         { label: 'Input Nilai Akhir', path: '/guru/nilai' },
+        { label: 'Rekap Nilai Akhir', path: '/guru/rekap-nilai-akhir' },
         { label: 'Input Nilai Harian dan Quiz', path: '/guru/nilai-harian' },
         { label: 'Rekap Nilai Harian dan Quiz', path: '/guru/nilai-harian-quiz' },
         { label: "Setoran Al-Qur'an", path: '/guru/quran' },

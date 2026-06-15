@@ -245,6 +245,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/guru-mapel/rekap-nilai-akhir/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/guru-mapel/rekap-nilai-akhir">> = Specific
+  const handler = {} as typeof import("../../src/app/guru-mapel/rekap-nilai-akhir/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/guru/monitoring-presensi/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/guru/monitoring-presensi">> = Specific
@@ -321,6 +330,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends AppPageConfig<"/guru/rekap-absensi">> = Specific
   const handler = {} as typeof import("../../src/app/guru/rekap-absensi/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/guru/rekap-nilai-akhir/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/guru/rekap-nilai-akhir">> = Specific
+  const handler = {} as typeof import("../../src/app/guru/rekap-nilai-akhir/page.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

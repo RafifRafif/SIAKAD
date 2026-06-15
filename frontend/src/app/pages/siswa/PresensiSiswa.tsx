@@ -98,11 +98,6 @@ export default function PresensiSiswa() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Rekap Presensi</h2>
-        <p className="text-gray-600 mt-1">Pantau kehadiran Anda</p>
-      </div>
-
       {/* Summary Cards */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {summaryCards.map((card, index) => {

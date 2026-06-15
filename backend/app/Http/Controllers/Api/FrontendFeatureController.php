@@ -326,27 +326,63 @@ class FrontendFeatureController extends Controller
     {
         $nis = $this->targetNis($request);
         $student = Student::query()->where('nis', $nis)->first();
-        $grades = StudentGrade::query()->where('nis', $nis)->orderBy('mapel')->get();
-        $average = $grades->avg('nilai');
-        $rank = $this->rankForStudent($nis);
+        $tahunAjaran = (string) $request->string('tahunAjaran', $student?->tahun_ajaran ?? '');
+        $semester = $this->semesterFromTahunAjaran($tahunAjaran);
+        $kelas = $student?->kelas ?? '-';
+        $grades = StudentGrade::query()
+            ->where('nis', $nis)
+            ->when($tahunAjaran !== '', fn ($query) => $query->where('tahun_ajaran', $tahunAjaran))
+            ->orderBy('mapel')
+            ->get();
+        $assignments = LearningAssignment::query()
+            ->when($tahunAjaran !== '', fn ($query) => $query->where('tahun_ajaran', $tahunAjaran))
+            ->when($student?->kelas, fn ($query) => $query->where('kelas', $student->kelas))
+            ->orderBy('nama')
+            ->get();
+        $mapelNames = $assignments->pluck('nama')
+            ->merge($grades->pluck('mapel'))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+        $rows = $mapelNames->map(function (string $mapel) use ($assignments, $grades): array {
+            $assignment = $assignments->firstWhere('nama', $mapel);
+            $mapelGrades = $grades->where('mapel', $mapel);
+            $average = $mapelGrades->count() > 0 ? round((float) $mapelGrades->avg('nilai'), 2) : null;
 
-        $lines = [
-            'Rapor Siswa SIAKAD',
-            'NIS: '.$nis,
-            'Nama: '.($student?->nama ?? '-'),
-            'Kelas: '.($student?->kelas ?? '-'),
-            'Tahun ajaran: '.($student?->tahun_ajaran ?? '-'),
-            'Rata-rata: '.($average !== null ? round((float) $average, 2) : '0'),
-            'Peringkat kelas: '.($rank['rank'] ?? '-').'/'.($rank['classSize'] ?? '-'),
-            '',
-            'Daftar nilai:',
-        ];
+            return [
+                'mapel' => $mapel,
+                'guru' => $assignment?->guru_pengampu ?? $mapelGrades->first()?->guru ?? '-',
+                'angka' => $average !== null ? (string) $average : '-',
+                'predikat' => $average !== null ? $this->gradeLabelFromAverage($average) : '-',
+            ];
+        })->values()->all();
+        $nilaiTerisi = array_values(array_filter($rows, fn (array $row) => $row['angka'] !== '-'));
+        $totalNilai = array_sum(array_map(fn (array $row) => (float) $row['angka'], $nilaiTerisi));
+        $rataRata = count($nilaiTerisi) > 0 ? round($totalNilai / count($nilaiTerisi), 2) : null;
+        $attendance = AttendanceRecord::query()
+            ->where('nis', $nis)
+            ->when($tahunAjaran !== '', fn ($query) => $query->where('tahun_ajaran', $tahunAjaran))
+            ->get();
 
-        foreach ($grades as $grade) {
-            $lines[] = $grade->mapel.' - '.$grade->jenis_penilaian.': '.$grade->nilai.' ('.$grade->grade().')';
-        }
+        $pdf = $this->studentReportPdf([
+            'nis' => $nis,
+            'nama' => $student?->nama ?? '-',
+            'kelas' => $kelas,
+            'tahunAjaran' => $tahunAjaran !== '' ? $tahunAjaran : '-',
+            'semester' => $semester,
+            'rows' => $rows,
+            'totalNilai' => count($nilaiTerisi) > 0 ? (string) round($totalNilai, 2) : '-',
+            'rataRata' => $rataRata !== null ? (string) $rataRata : '-',
+            'sakit' => (string) $attendance->filter(fn (AttendanceRecord $record) => in_array($record->status, ['sakit', 'Sakit'], true))->count(),
+            'izin' => (string) $attendance->filter(fn (AttendanceRecord $record) => in_array($record->status, ['izin', 'Izin'], true))->count(),
+            'alpha' => (string) $attendance->filter(fn (AttendanceRecord $record) => in_array($record->status, ['alpha', 'Alpha', 'Tidak Hadir'], true))->count(),
+        ]);
 
-        return $this->downloadPdf('rapor-'.$nis.'.pdf', 'Rapor Siswa', $lines);
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="rapor-'.$nis.'.pdf"',
+        ]);
     }
 
     public function studentInsights(Request $request): JsonResponse
@@ -1016,6 +1052,230 @@ class FrontendFeatureController extends Controller
             '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
             '5 0 obj << /Length '.strlen($content).' >> stream'."\n".$content."\nendstream endobj",
         ];
+        $pdf = "%PDF-1.4\n";
+        $offsets = [0];
+
+        foreach ($objects as $object) {
+            $offsets[] = strlen($pdf);
+            $pdf .= $object."\n";
+        }
+
+        $xrefOffset = strlen($pdf);
+        $pdf .= "xref\n0 ".(count($objects) + 1)."\n";
+        $pdf .= "0000000000 65535 f \n";
+
+        foreach (array_slice($offsets, 1) as $offset) {
+            $pdf .= str_pad((string) $offset, 10, '0', STR_PAD_LEFT)." 00000 n \n";
+        }
+
+        $pdf .= "trailer << /Size ".(count($objects) + 1)." /Root 1 0 R >>\n";
+        $pdf .= "startxref\n".$xrefOffset."\n%%EOF";
+
+        return $pdf;
+    }
+
+    /**
+     * @param array{
+     *   nis: string,
+     *   nama: string,
+     *   kelas: string,
+     *   tahunAjaran: string,
+     *   semester: string,
+     *   rows: list<array{mapel: string, guru: string, angka: string, predikat: string}>,
+     *   totalNilai: string,
+     *   rataRata: string,
+     *   sakit: string,
+     *   izin: string,
+     *   alpha: string
+     * } $report
+     */
+    private function studentReportPdf(array $report): string
+    {
+        $content = '';
+        $logoPath = dirname(base_path()).DIRECTORY_SEPARATOR.'frontend'.DIRECTORY_SEPARATOR.'public'.DIRECTORY_SEPARATOR.'logo.png';
+        $content .= $this->pdfImage('Im1', 42, 775, 38, 38);
+        $content .= $this->pdfTextAt('LAPORAN HASIL BELAJAR SISWA ONLINE', 182, 808, 10, true);
+        $content .= $this->pdfTextAt('SMA IT ULIL ALBAB', 238, 794, 11, true);
+        $content .= $this->pdfImage('Im1', 515, 775, 38, 38);
+        $content .= $this->pdfLine(35, 764, 560, 764, 2);
+        $content .= $this->pdfTextAt('RAPOR HASIL BELAJAR', 236, 742, 10, true);
+
+        $content .= $this->pdfTextAt('Nama', 70, 712, 9);
+        $content .= $this->pdfTextAt(': '.$report['nama'], 145, 712, 9);
+        $content .= $this->pdfTextAt('Kelas', 70, 696, 9);
+        $content .= $this->pdfTextAt(': '.$report['kelas'], 145, 696, 9);
+        $content .= $this->pdfTextAt('Tahun Ajaran', 330, 712, 9);
+        $content .= $this->pdfTextAt(': '.$report['tahunAjaran'], 420, 712, 9);
+        $content .= $this->pdfTextAt('Semester', 330, 696, 9);
+        $content .= $this->pdfTextAt(': '.$report['semester'], 420, 696, 9);
+
+        $x = 55;
+        $y = 660;
+        $rowHeight = 18;
+        $widths = [30, 210, 145, 55, 65];
+        $headers = ['No', 'Nama Mata Pelajaran', 'Guru Ampu', 'Angka', 'Predikat'];
+        $content .= $this->pdfTableRow($x, $y, $widths, $headers, $rowHeight, true);
+        $y -= $rowHeight;
+
+        $maxRows = 14;
+        $rows = array_slice($report['rows'], 0, $maxRows);
+
+        foreach ($rows as $index => $row) {
+            $content .= $this->pdfTableRow($x, $y, $widths, [
+                (string) ($index + 1),
+                $row['mapel'],
+                $row['guru'],
+                $row['angka'],
+                $row['predikat'],
+            ], $rowHeight);
+            $y -= $rowHeight;
+        }
+
+        for ($index = count($rows); $index < $maxRows; $index++) {
+            $content .= $this->pdfTableRow($x, $y, $widths, [
+                (string) ($index + 1),
+                '',
+                '',
+                '',
+                '',
+            ], $rowHeight);
+            $y -= $rowHeight;
+        }
+
+        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Total Nilai', $report['totalNilai'], '');
+        $y -= $rowHeight;
+        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Rata - rata', $report['rataRata'], '');
+        $y -= $rowHeight;
+        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Sakit', $report['sakit'], 'hari');
+        $y -= $rowHeight;
+        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Izin', $report['izin'], 'hari');
+        $y -= $rowHeight;
+        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Tanpa Keterangan', $report['alpha'], 'hari');
+
+        $signatureY = 135;
+        $content .= $this->pdfTextAt('Orang Tua/Wali', 80, $signatureY, 8, true);
+        $content .= $this->pdfTextAt('Wali Kelas', 250, $signatureY, 8, true);
+        $content .= $this->pdfTextAt('Kepala Sekolah', 410, $signatureY, 8, true);
+        $content .= $this->pdfLine(72, 80, 160, 80, 1);
+        $content .= $this->pdfLine(230, 80, 318, 80, 1);
+        $content .= $this->pdfLine(392, 80, 480, 80, 1);
+
+        return $this->buildPdfFromContent($content, is_file($logoPath) ? $logoPath : null);
+    }
+
+    private function semesterFromTahunAjaran(string $tahunAjaran): string
+    {
+        if (str_contains(strtolower($tahunAjaran), 'ganjil')) {
+            return 'Ganjil';
+        }
+
+        if (str_contains(strtolower($tahunAjaran), 'genap')) {
+            return 'Genap';
+        }
+
+        $academicYear = AcademicYear::query()
+            ->get()
+            ->first(fn (AcademicYear $item) => trim($item->nama.' '.$item->semester) === trim($tahunAjaran));
+
+        return $academicYear?->semester ?? '-';
+    }
+
+    private function gradeLabelFromAverage(float $average): string
+    {
+        return match (true) {
+            $average >= 90 => 'A',
+            $average >= 80 => 'B',
+            $average >= 70 => 'C',
+            $average >= 60 => 'D',
+            default => 'E',
+        };
+    }
+
+    /**
+     * @param list<int> $widths
+     * @param list<string> $cells
+     */
+    private function pdfTableRow(int $x, int $y, array $widths, array $cells, int $height, bool $header = false): string
+    {
+        $content = '';
+        $currentX = $x;
+
+        foreach ($widths as $index => $width) {
+            $content .= $this->pdfRect($currentX, $y - $height + 4, $width, $height);
+            $content .= $this->pdfTextAt($this->pdfCellText($cells[$index] ?? '', $width), $currentX + 4, $y - 8, 7, $header);
+            $currentX += $width;
+        }
+
+        return $content;
+    }
+
+    /**
+     * @param list<int> $widths
+     */
+    private function pdfSummaryRow(int $x, int $y, array $widths, string $label, string $value, string $suffix): string
+    {
+        $row = ['', $label, '', $value, $suffix];
+
+        return $this->pdfTableRow($x, $y, $widths, $row, 18, true);
+    }
+
+    private function pdfCellText(string $text, int $width): string
+    {
+        $maxChars = max(6, (int) floor($width / 4.3));
+        $clean = preg_replace('/[^\x20-\x7E]/', '', $text) ?? '';
+
+        return strlen($clean) > $maxChars ? substr($clean, 0, $maxChars - 3).'...' : $clean;
+    }
+
+    private function pdfTextAt(string $text, int $x, int $y, int $size = 10, bool $bold = false): string
+    {
+        $font = $bold ? 'F2' : 'F1';
+
+        return "BT\n/".$font.' '.$size." Tf\n".$x.' '.$y." Td\n(".$this->pdfText($text).") Tj\nET\n";
+    }
+
+    private function pdfLine(int $x1, int $y1, int $x2, int $y2, int $width = 1): string
+    {
+        return $width." w\n".$x1.' '.$y1.' m '.$x2.' '.$y2." l S\n";
+    }
+
+    private function pdfRect(int $x, int $y, int $width, int $height): string
+    {
+        return $x.' '.$y.' '.$width.' '.$height." re S\n";
+    }
+
+    private function pdfImage(string $name, int $x, int $y, int $width, int $height): string
+    {
+        return "q\n".$width.' 0 0 '.$height.' '.$x.' '.$y." cm\n/".$name." Do\nQ\n";
+    }
+
+    private function buildPdfFromContent(string $content, ?string $imagePath = null): string
+    {
+        $imageObject = null;
+        $xObjectResource = '';
+
+        if ($imagePath !== null) {
+            $imageInfo = @getimagesize($imagePath);
+            $imageData = @file_get_contents($imagePath);
+
+            if ($imageInfo !== false && $imageData !== false && ($imageInfo[2] ?? null) === IMAGETYPE_JPEG) {
+                $xObjectResource = ' /XObject << /Im1 7 0 R >>';
+                $imageObject = '7 0 obj << /Type /XObject /Subtype /Image /Width '.$imageInfo[0].' /Height '.$imageInfo[1].' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '.strlen($imageData).' >> stream'."\n".$imageData."\nendstream endobj";
+            }
+        }
+
+        $objects = [
+            '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+            '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+            '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >>'.$xObjectResource.' >> /Contents 6 0 R >> endobj',
+            '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+            '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj',
+            '6 0 obj << /Length '.strlen($content).' >> stream'."\n".$content."\nendstream endobj",
+        ];
+
+        if ($imageObject !== null) {
+            $objects[] = $imageObject;
+        }
         $pdf = "%PDF-1.4\n";
         $offsets = [0];
 

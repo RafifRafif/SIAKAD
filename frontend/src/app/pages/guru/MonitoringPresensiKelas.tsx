@@ -175,13 +175,7 @@ export default function MonitoringPresensiKelas() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Monitoring Presensi</h2>
-          <p className="mt-1 text-gray-600">
-            Pantau presensi murid yang diinput oleh guru mata pelajaran
-          </p>
-        </div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <button
             type="button"

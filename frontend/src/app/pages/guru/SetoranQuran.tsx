@@ -205,11 +205,6 @@ export default function SetoranQuran() {
         />
       ))}
 
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Setoran Hafalan Al-Qur'an</h2>
-        <p className="text-gray-600 mt-1">Catat progress hafalan siswa</p>
-      </div>
-
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Student Progress Cards */}
         <div className="lg:col-span-1 space-y-4">

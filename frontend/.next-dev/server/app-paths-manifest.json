@@ -1,9 +1,10 @@
 {
   "/api/[...path]/route": "app/api/[...path]/route.js",
   "/login/page": "app/login/page.js",
+  "/guru/rekap-absensi/page": "app/guru/rekap-absensi/page.js",
   "/siswa/page": "app/siswa/page.js",
-  "/guru/page": "app/guru/page.js",
+  "/siswa/nilai/page": "app/siswa/nilai/page.js",
   "/guru/nilai/page": "app/guru/nilai/page.js",
-  "/guru/rekap-nilai/page": "app/guru/rekap-nilai/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/siswa/presensi/page": "app/siswa/presensi/page.js",
+  "/guru/nilai-harian/page": "app/guru/nilai-harian/page.js"
 }
