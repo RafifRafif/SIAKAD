@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Award, TrendingUp, Calendar, type LucideIcon } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { motion } from 'motion/react';
 import { getAuthSession } from '../../lib/authStore';
 import {
@@ -17,16 +16,6 @@ import {
   type StudentInsights,
   type StudentGradeItem,
 } from '../../lib/academicActivityStore';
-
-const SiswaGradeChart = dynamic(() => import('./SiswaGradeChart'), {
-  ssr: false,
-  loading: () => (
-    <div className="h-[397px] animate-pulse rounded-xl border border-gray-200 bg-white p-6 shadow-sm lg:col-span-2">
-      <div className="mb-6 h-6 w-56 rounded bg-gray-200" />
-      <div className="h-[300px] rounded-lg bg-gray-100" />
-    </div>
-  ),
-});
 
 interface SiswaMetricCardProps {
   icon: LucideIcon;
@@ -213,108 +202,11 @@ export default function SiswaDashboard() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <SiswaGradeChart />
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="relative overflow-hidden rounded-xl border border-blue-50 bg-white p-6 shadow-sm"
-        >
-          <div className="absolute -right-20 -top-24 h-52 w-52 rounded-full bg-blue-50" />
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#2563EB] via-cyan-400 to-violet-500" />
-          <div className="relative">
-            <span className="inline-flex rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#2563EB]">
-              Jadwal
-            </span>
-            <h3 className="mt-3 mb-6 text-lg font-bold text-[#111b45]">Jadwal Hari Ini</h3>
-          </div>
-          <div className="relative space-y-4">
-            {assignments.slice(0, 3).map((jadwal) => (
-              <div
-                key={jadwal.id}
-                className="group relative overflow-hidden rounded-lg border border-blue-50 bg-white/95 p-4 shadow-sm transition-all hover:border-[#2563EB] hover:shadow-md"
-              >
-                <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-[#2563EB] to-cyan-400 opacity-70" />
-                <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-indigo-50 transition-transform group-hover:scale-125" />
-                <div className="relative flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                      <BookOpen size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-[#111b45]">
-                        {jadwal.nama}
-                      </span>
-                      <p className="mt-1 truncate text-xs text-[#526083]">{jadwal.guruPengampu}</p>
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
-                    {jadwal.kelas}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {assignments.length === 0 && (
-              <div className="rounded-lg border border-dashed border-blue-100 px-4 py-6 text-center text-sm text-[#526083]">
-                Jadwal hari ini akan tampil setelah tersedia.
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="relative overflow-hidden rounded-xl border border-blue-50 bg-white p-6 shadow-sm"
-        >
-          <div className="absolute -right-24 -top-28 h-64 w-64 rounded-full bg-blue-50" />
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#2563EB] via-cyan-400 to-violet-500" />
-          <div className="relative">
-            <span className="inline-flex rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#2563EB]">
-              Akademik
-            </span>
-            <h3 className="mt-3 mb-4 text-lg font-bold text-[#111b45]">Nilai Terbaru</h3>
-          </div>
-          <div className="relative space-y-3">
-            {grades.slice(0, 4).map((item) => (
-              <div
-                key={item.id}
-                className="group flex items-center justify-between rounded-lg border border-blue-50 bg-white/95 p-3 shadow-sm transition-all hover:border-[#2563EB] hover:shadow-md"
-              >
-                <div>
-                  <p className="font-semibold text-[#111b45]">{item.mapel}</p>
-                  <p className="text-xs text-[#526083]">{item.jenis}</p>
-                </div>
-                <span
-                  className={`rounded-lg px-4 py-2 font-bold ${
-                    item.nilai >= 90
-                      ? 'bg-green-100 text-green-700'
-                      : item.nilai >= 80
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-yellow-100 text-yellow-700'
-                  }`}
-                >
-                  {item.nilai}
-                </span>
-              </div>
-            ))}
-            {grades.length === 0 && (
-              <div className="rounded-lg border border-dashed border-blue-100 px-4 py-6 text-center text-sm text-[#526083]">
-                Nilai terbaru akan tampil setelah tersedia.
-              </div>
-            )}
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
           className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#0064ff] via-[#2f68ff] to-[#7660f6] p-6 text-white shadow-lg"
         >
           <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full border border-white/20" />

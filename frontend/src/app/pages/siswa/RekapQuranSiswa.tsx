@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, CheckCircle } from 'lucide-react';
-import { motion } from 'motion/react';
 import { getAuthSession } from '../../lib/authStore';
 import {
   formatDisplayDate,
@@ -26,23 +24,6 @@ export default function RekapQuranSiswa() {
 
     void loadSubmissions().catch(() => setSubmissions([]));
   }, []);
-
-  const totalSetoran = submissions.length;
-  const progressJuz = Math.max(...submissions.map((item) => item.progress), 0);
-  const totalAyat = submissions.reduce(
-    (total, item) => total + Math.max(0, item.ayatSelesai - item.ayatMulai + 1),
-    0
-  );
-  const latestSubmission = submissions[0];
-  const summaryCards = useMemo(
-    () => [
-      { label: 'Total Setoran', value: totalSetoran, icon: BookOpen },
-      { label: 'Progress Juz', value: progressJuz, icon: CheckCircle },
-      { label: 'Total Ayat', value: totalAyat, icon: BookOpen },
-      { label: 'Setoran Terakhir', value: latestSubmission?.surah ?? '-', icon: CheckCircle },
-    ],
-    [latestSubmission, progressJuz, totalAyat, totalSetoran]
-  );
 
   return (
     <div className="space-y-6">
@@ -69,32 +50,6 @@ export default function RekapQuranSiswa() {
           </div>
         </div>
       )}
-
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {summaryCards.map((card, index) => {
-          const Icon = card.icon;
-
-          return (
-            <motion.div
-              key={card.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm"
-            >
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-[#2563EB]">
-                  <Icon size={24} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">{card.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-200 p-6">

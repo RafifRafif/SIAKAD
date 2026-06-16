@@ -65,67 +65,8 @@ export default function PresensiSiswa() {
     void loadPresensi().catch(() => setPresensiData([]));
   }, []);
 
-  const totalHadir = presensiData.filter((p) => p.statusCode === 'H').length;
-  const totalAlpha = presensiData.filter((p) => p.statusCode === 'A').length;
-  const totalSakit = presensiData.filter((p) => p.statusCode === 'S').length;
-  const totalIzin = presensiData.filter((p) => p.statusCode === 'I').length;
-  const summaryCards = [
-    {
-      label: 'Total Hadir',
-      value: totalHadir,
-      icon: CheckCircle,
-      iconClassName: 'bg-green-100 text-green-600',
-    },
-    {
-      label: 'Total Alpha',
-      value: totalAlpha,
-      icon: XCircle,
-      iconClassName: 'bg-red-100 text-red-600',
-    },
-    {
-      label: 'Total Sakit',
-      value: totalSakit,
-      icon: XCircle,
-      iconClassName: 'bg-amber-100 text-amber-600',
-    },
-    {
-      label: 'Total Izin',
-      value: totalIzin,
-      icon: CheckCircle,
-      iconClassName: 'bg-blue-100 text-blue-600',
-    },
-  ];
-
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {summaryCards.map((card, index) => {
-          const Icon = card.icon;
-
-          return (
-            <motion.div
-              key={card.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className="bg-white rounded-xl p-6 shadow-sm border border-gray-200"
-            >
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${card.iconClassName}`}>
-                  <Icon size={24} />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">{card.label}</p>
-                  <p className="text-2xl font-bold text-gray-900">{card.value}</p>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Presensi Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Riwayat Presensi</h3>
