@@ -21,26 +21,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/[...path]/route.js"
     ],
-    "/admin/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/layout.js"
-    ],
-    "/admin/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/page.js"
-    ],
-    "/admin/siswa/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/siswa/page.js"
-    ],
-    "/admin/guru/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/guru/page.js"
-    ],
     "/guru/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -51,65 +31,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/guru/page.js"
     ],
-    "/guru/rekap-nilai-akhir/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/rekap-nilai-akhir/page.js"
-    ],
-    "/guru/nilai/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/nilai/page.js"
-    ],
-    "/guru/nilai-harian-quiz/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/nilai-harian-quiz/page.js"
-    ],
-    "/guru/nilai-harian/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/nilai-harian/page.js"
-    ],
-    "/guru/riwayat-quran/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/riwayat-quran/page.js"
-    ],
-    "/guru/quran/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/quran/page.js"
-    ],
-    "/guru/rekap-absensi/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/rekap-absensi/page.js"
-    ],
     "/guru/presensi/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/guru/presensi/page.js"
     ],
-    "/siswa/layout": [
+    "/guru/rekap-absensi/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/siswa/layout.js"
-    ],
-    "/siswa/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/siswa/page.js"
-    ],
-    "/siswa/nilai/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/siswa/nilai/page.js"
-    ],
-    "/siswa/presensi/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/siswa/presensi/page.js"
+      "static/chunks/app/guru/rekap-absensi/page.js"
     ]
   }
 }

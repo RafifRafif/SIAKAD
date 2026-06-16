@@ -4,11 +4,5 @@
     "files": [
       "static/chunks/_app-pages-browser_node_modules_next_dist_client_dev_noop-turbopack-hmr_js.js"
     ]
-  },
-  "app\\pages\\siswa\\SiswaDashboard.tsx -> ./SiswaGradeChart": {
-    "id": "app\\pages\\siswa\\SiswaDashboard.tsx -> ./SiswaGradeChart",
-    "files": [
-      "static/chunks/_app-pages-browser_src_app_pages_siswa_SiswaGradeChart_tsx.js"
-    ]
   }
 }
