@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ClipboardList, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
 import {
   getAttendanceRecords,
   monthLabelFromDate,
@@ -186,10 +186,6 @@ export default function MonitoringPresensiKelas() {
             <Download size={18} />
             Download Excel
           </button>
-          <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB]">
-            <ClipboardList size={18} />
-            Rekap Harian Kelas
-          </div>
         </div>
       </div>
 

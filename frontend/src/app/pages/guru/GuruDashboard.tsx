@@ -268,16 +268,18 @@ export default function GuruDashboard() {
               Pantau presensi, penilaian, dan aktivitas pembelajaran dari satu ruang kerja yang mengikuti akses guru.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
-            <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/20 backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Akses Aktif</p>
-              <p className="mt-1 text-sm font-semibold text-white">{accessLabel}</p>
+          {!(hasWaliKelas && !hasGuruMapel) && (
+            <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
+              <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/20 backdrop-blur">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Akses Aktif</p>
+                <p className="mt-1 text-sm font-semibold text-white">{accessLabel}</p>
+              </div>
+              <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/20 backdrop-blur">
+                <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Jadwal Hari Ini</p>
+                <p className="mt-1 text-2xl font-bold text-white">{assignments.length}</p>
+              </div>
             </div>
-            <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/20 backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Jadwal Hari Ini</p>
-              <p className="mt-1 text-2xl font-bold text-white">{assignments.length}</p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -306,27 +308,6 @@ export default function GuruDashboard() {
 
       {hasWaliKelas && !hasGuruMapel && (
         <div className="grid gap-6">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <GuruMetricCard
-              icon={CheckCircle2}
-              label="Siswa Hadir"
-              value={attendanceSummary.H}
-              caption="Presensi hari ini"
-              color="bg-gradient-to-r from-emerald-500 to-emerald-100"
-              iconBg="bg-emerald-50"
-              iconColor="text-emerald-600"
-            />
-            <GuruMetricCard
-              icon={FileText}
-              label="Monitoring Nilai"
-              value={summary.guru.inputNilai}
-              caption="Data nilai terpantau"
-              color="bg-gradient-to-r from-[#2563EB] to-blue-100"
-              iconBg="bg-blue-50"
-              iconColor="text-blue-600"
-            />
-          </div>
-
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

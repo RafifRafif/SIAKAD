@@ -40,6 +40,31 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/guru/rekap-absensi/page.js"
+    ],
+    "/guru/nilai/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/nilai/page.js"
+    ],
+    "/guru/nilai-harian/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/nilai-harian/page.js"
+    ],
+    "/guru/monitoring-presensi/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/monitoring-presensi/page.js"
+    ],
+    "/guru/rekap-nilai/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/rekap-nilai/page.js"
+    ],
+    "/guru/riwayat-quran/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/guru/riwayat-quran/page.js"
     ]
   }
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { FileText } from 'lucide-react';
 import {
   getGrades,
   uniqueValues,
@@ -99,13 +98,6 @@ export default function RekapNilaiGuruKelas() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
-        <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB]">
-          <FileText size={18} />
-          Rekap Nilai Kelas
-        </div>
-      </div>
-
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="grid gap-4 md:grid-cols-1">
           <div>
