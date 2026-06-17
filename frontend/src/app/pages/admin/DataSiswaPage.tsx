@@ -38,9 +38,14 @@ export default function DataSiswaPage() {
 
   const [formData, setFormData] = useState({
     nis: '',
+    nisn: '',
+    nik: '',
     nama: '',
     tahunAjaran: '',
     kelas: '',
+    waliKelas: '',
+    asalSekolah: '',
+    namaOrangTua: '',
     jenisKelamin: 'Laki-laki',
     tempatLahir: '',
     tanggalLahir: '',
@@ -110,9 +115,14 @@ export default function DataSiswaPage() {
     setEditingStudent(null);
     setFormData({
       nis: '',
+      nisn: '',
+      nik: '',
       nama: '',
       tahunAjaran: '',
       kelas: '',
+      waliKelas: '',
+      asalSekolah: '',
+      namaOrangTua: '',
       jenisKelamin: '',
       tempatLahir: '',
       tanggalLahir: '',
@@ -132,9 +142,14 @@ export default function DataSiswaPage() {
     const rows = [
       {
         nis: '1234567890',
+        nisn: '001234567890',
+        nik: '2171010101010001',
         nama: 'Ahmad Fauzan',
         tahunAjaran: '2026/2027 Ganjil',
         kelas: 'X-1',
+        waliKelas: 'Ustadz Ahmad',
+        asalSekolah: 'SMP IT Ulil Albab',
+        namaOrangTua: 'Bapak Fauzi',
         jenisKelamin: 'Laki-laki',
         tempatLahir: 'Batam',
         tanggalLahir: '2010-01-15',
@@ -146,9 +161,14 @@ export default function DataSiswaPage() {
     const worksheet = XLSX.utils.json_to_sheet(rows, {
       header: [
         'nis',
+        'nisn',
+        'nik',
         'nama',
         'tahunAjaran',
         'kelas',
+        'waliKelas',
+        'asalSekolah',
+        'namaOrangTua',
         'jenisKelamin',
         'tempatLahir',
         'tanggalLahir',
@@ -161,9 +181,14 @@ export default function DataSiswaPage() {
 
     worksheet['!cols'] = [
       { wch: 14 },
+      { wch: 16 },
+      { wch: 20 },
       { wch: 24 },
       { wch: 18 },
       { wch: 10 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 24 },
       { wch: 14 },
       { wch: 16 },
       { wch: 14 },
@@ -217,9 +242,14 @@ export default function DataSiswaPage() {
     setEditingStudent(student);
     setFormData({
       nis: student.nis,
+      nisn: student.nisn ?? '',
+      nik: student.nik ?? '',
       nama: student.nama,
       tahunAjaran: student.tahunAjaran,
       kelas: student.kelas,
+      waliKelas: student.waliKelas ?? '',
+      asalSekolah: student.asalSekolah ?? '',
+      namaOrangTua: student.namaOrangTua ?? '',
       jenisKelamin: student.jenisKelamin,
       tempatLahir: student.tempatLahir ?? '',
       tanggalLahir: student.tanggalLahir ?? '',
@@ -258,9 +288,14 @@ export default function DataSiswaPage() {
       const payload = {
         ...formData,
         nis: formData.nis.trim(),
+        nisn: formData.nisn.trim(),
+        nik: formData.nik.trim(),
         nama: formData.nama.trim(),
         tahunAjaran: formData.tahunAjaran.trim(),
         kelas: formData.kelas.trim(),
+        waliKelas: formData.waliKelas.trim(),
+        asalSekolah: formData.asalSekolah.trim(),
+        namaOrangTua: formData.namaOrangTua.trim(),
         tempatLahir: formData.tempatLahir.trim(),
         tanggalLahir: formData.tanggalLahir,
         alamat: formData.alamat.trim(),
@@ -411,6 +446,9 @@ export default function DataSiswaPage() {
                       NIS
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      NISN
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Nama
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -437,6 +475,9 @@ export default function DataSiswaPage() {
                     >
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         {student.nis}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        {student.nisn || '-'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{student.nama}</td>
                       <td className="px-6 py-4 text-sm">
@@ -555,9 +596,14 @@ export default function DataSiswaPage() {
 
               <div className="grid gap-4 p-6 md:grid-cols-2">
                 <DetailItem label="NIS" value={detailStudent.nis} />
+                <DetailItem label="NISN" value={detailStudent.nisn} />
+                <DetailItem label="NIK" value={detailStudent.nik} />
                 <DetailItem label="Nama Lengkap" value={detailStudent.nama} />
                 <DetailItem label="Tahun Ajaran" value={detailStudent.tahunAjaran} />
                 <DetailItem label="Kelas" value={detailStudent.kelas} />
+                <DetailItem label="Wali Kelas" value={detailStudent.waliKelas} />
+                <DetailItem label="Asal Sekolah" value={detailStudent.asalSekolah} />
+                <DetailItem label="Nama Orang Tua" value={detailStudent.namaOrangTua} />
                 <DetailItem label="Jenis Kelamin" value={detailStudent.jenisKelamin} />
                 <DetailItem label="Tempat Lahir" value={detailStudent.tempatLahir} />
                 <DetailItem label="Tanggal Lahir" value={detailStudent.tanggalLahir} />
@@ -688,6 +734,30 @@ export default function DataSiswaPage() {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NISN
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nisn}
+                        onChange={(e) => setFormData({ ...formData, nisn: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NIK
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nik}
+                        onChange={(e) => setFormData({ ...formData, nik: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
                         Nama Lengkap
                       </label>
                       <input
@@ -739,6 +809,42 @@ export default function DataSiswaPage() {
                           </option>
                         ))}
                       </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Wali Kelas
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.waliKelas}
+                        onChange={(e) => setFormData({ ...formData, waliKelas: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Asal Sekolah
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.asalSekolah}
+                        onChange={(e) => setFormData({ ...formData, asalSekolah: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Orang Tua
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.namaOrangTua}
+                        onChange={(e) => setFormData({ ...formData, namaOrangTua: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+                      />
                     </div>
 
                     <div>

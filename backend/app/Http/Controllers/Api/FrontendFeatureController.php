@@ -193,9 +193,14 @@ class FrontendFeatureController extends Controller
             $student = Student::query()->updateOrCreate(
                 ['nis' => $nis],
                 [
+                    'nisn' => $row['nisn'] ?: null,
+                    'nik' => $row['nik'] ?: null,
                     'nama' => $nama,
                     'tahun_ajaran' => $tahunAjaran,
                     'kelas' => $kelas,
+                    'wali_kelas' => $row['waliKelas'] ?: null,
+                    'asal_sekolah' => $row['asalSekolah'] ?: null,
+                    'nama_orang_tua' => $row['namaOrangTua'] ?: null,
                     'jenis_kelamin' => $row['jenisKelamin'] ?: 'Laki-laki',
                     'tempat_lahir' => $row['tempatLahir'] ?: null,
                     'tanggal_lahir' => $row['tanggalLahir'] ?: null,
@@ -623,10 +628,15 @@ class FrontendFeatureController extends Controller
         foreach (array_slice($rows, 1) as $row) {
             $mapped = [
                 'nis' => '',
+                'nisn' => '',
+                'nik' => '',
                 'nip' => '',
                 'nama' => '',
                 'tahunAjaran' => '',
                 'kelas' => '',
+                'waliKelas' => '',
+                'asalSekolah' => '',
+                'namaOrangTua' => '',
                 'jenisKelamin' => '',
                 'tempatLahir' => '',
                 'tanggalLahir' => '',
@@ -711,10 +721,15 @@ class FrontendFeatureController extends Controller
     {
         return match ($header) {
             'nis', 'nomorinduk', 'nomorinduksiswa' => 'nis',
+            'nisn' => 'nisn',
+            'nik' => 'nik',
             'nip', 'nomorindukpegawai', 'nomorindukguru' => 'nip',
             'nama', 'namalengkap', 'namasiswa' => 'nama',
             'tahunajaran', 'tahun' => 'tahunAjaran',
             'kelas', 'class' => 'kelas',
+            'walikelas', 'wali' => 'waliKelas',
+            'asalsekolah', 'sekolahasal' => 'asalSekolah',
+            'namaorangtua', 'orangtua', 'namaortu' => 'namaOrangTua',
             'jeniskelamin', 'jk', 'gender' => 'jenisKelamin',
             'tempatlahir', 'tempat' => 'tempatLahir',
             'tanggallahir', 'tgllahir', 'ttl' => 'tanggalLahir',

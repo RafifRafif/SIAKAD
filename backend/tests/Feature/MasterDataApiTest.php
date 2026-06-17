@@ -32,9 +32,14 @@ class MasterDataApiTest extends TestCase
 
         Student::query()->create([
             'nis' => 'SIS001',
+            'nisn' => '0011223344',
+            'nik' => '2171010101010001',
             'nama' => 'Siswa Test',
             'tahun_ajaran' => 'Tahun Test',
             'kelas' => 'Kelas Test',
+            'wali_kelas' => 'Wali Test',
+            'asal_sekolah' => 'SMP Test',
+            'nama_orang_tua' => 'Bapak Test',
             'jenis_kelamin' => 'Laki-laki',
             'tempat_lahir' => 'Bandung',
             'tanggal_lahir' => '2010-01-15',
@@ -58,7 +63,12 @@ class MasterDataApiTest extends TestCase
             ->assertOk()
             ->assertJsonFragment([
                 'nis' => 'SIS001',
+                'nisn' => '0011223344',
+                'nik' => '2171010101010001',
                 'nama' => 'Siswa Test',
+                'waliKelas' => 'Wali Test',
+                'asalSekolah' => 'SMP Test',
+                'namaOrangTua' => 'Bapak Test',
                 'tempatLahir' => 'Bandung',
                 'tanggalLahir' => '2010-01-15',
                 'alamat' => 'Jl. Siswa Test',
@@ -153,9 +163,14 @@ class MasterDataApiTest extends TestCase
 
         $createResponse = $this->actingAs($admin)->postJson('/api/students', [
             'nis' => 'SIS001',
+            'nisn' => '0099887766',
+            'nik' => '2171010101010002',
             'nama' => 'Siswa Lama',
             'tahunAjaran' => 'Tahun Test',
             'kelas' => 'Kelas Lama',
+            'waliKelas' => 'Wali Lama',
+            'asalSekolah' => 'SD Lama',
+            'namaOrangTua' => 'Ibu Lama',
             'jenisKelamin' => 'Laki-laki',
             'tempatLahir' => 'Bandung',
             'tanggalLahir' => '2010-01-15',
@@ -198,9 +213,14 @@ class MasterDataApiTest extends TestCase
         $this->actingAs($admin)
             ->putJson("/api/students/{$studentId}", [
                 'nis' => 'SIS002',
+                'nisn' => '0099887767',
+                'nik' => '2171010101010003',
                 'nama' => 'Siswa Baru',
                 'tahunAjaran' => 'Tahun Test',
                 'kelas' => 'Kelas Baru',
+                'waliKelas' => 'Wali Baru',
+                'asalSekolah' => 'SD Baru',
+                'namaOrangTua' => 'Ayah Baru',
                 'jenisKelamin' => 'Laki-laki',
                 'tempatLahir' => 'Jakarta',
                 'tanggalLahir' => '2010-02-20',
@@ -210,6 +230,11 @@ class MasterDataApiTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('nis', 'SIS002')
+            ->assertJsonPath('nisn', '0099887767')
+            ->assertJsonPath('nik', '2171010101010003')
+            ->assertJsonPath('waliKelas', 'Wali Baru')
+            ->assertJsonPath('asalSekolah', 'SD Baru')
+            ->assertJsonPath('namaOrangTua', 'Ayah Baru')
             ->assertJsonPath('tempatLahir', 'Jakarta')
             ->assertJsonPath('tanggalLahir', '2010-02-20')
             ->assertJsonPath('alamat', 'Jl. Baru');
@@ -223,6 +248,11 @@ class MasterDataApiTest extends TestCase
         ]);
         $this->assertDatabaseHas('students', [
             'nis' => 'SIS002',
+            'nisn' => '0099887767',
+            'nik' => '2171010101010003',
+            'wali_kelas' => 'Wali Baru',
+            'asal_sekolah' => 'SD Baru',
+            'nama_orang_tua' => 'Ayah Baru',
             'tempat_lahir' => 'Jakarta',
             'tanggal_lahir' => '2010-02-20',
             'alamat' => 'Jl. Baru',

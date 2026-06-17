@@ -1,9 +1,6 @@
 {
-  "/api/[...path]/route": "app/api/[...path]/route.js",
+  "/page": "app/page.js",
   "/login/page": "app/login/page.js",
   "/admin/page": "app/admin/page.js",
-  "/admin/tahun-ajaran/page": "app/admin/tahun-ajaran/page.js",
-  "/admin/guru/page": "app/admin/guru/page.js",
-  "/admin/kelas/page": "app/admin/kelas/page.js",
   "/admin/siswa/page": "app/admin/siswa/page.js"
 }

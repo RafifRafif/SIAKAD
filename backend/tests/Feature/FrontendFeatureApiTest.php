@@ -253,8 +253,8 @@ class FrontendFeatureApiTest extends TestCase
 
         $file = UploadedFile::fake()->createWithContent(
             'students.csv',
-            "nis,nama,tahunAjaran,kelas,jenisKelamin,tempatLahir,tanggalLahir,alamat,email,telepon\n".
-            "SIS100,Siswa Import,2026/2027 Genap,7A,Laki-laki,Bandung,2010-01-15,Jl. Import,sis100@example.test,080000000100\n"
+            "nis,nisn,nik,nama,tahunAjaran,kelas,waliKelas,asalSekolah,namaOrangTua,jenisKelamin,tempatLahir,tanggalLahir,alamat,email,telepon\n".
+            "SIS100,001122334455,2171010101010004,Siswa Import,2026/2027 Genap,7A,Wali Impor,SMP Impor,Bapak Import,Laki-laki,Bandung,2010-01-15,Jl. Import,sis100@example.test,080000000100\n"
         );
 
         $this->actingAs($admin)
@@ -266,7 +266,12 @@ class FrontendFeatureApiTest extends TestCase
 
         $this->assertDatabaseHas('students', [
             'nis' => 'SIS100',
+            'nisn' => '001122334455',
+            'nik' => '2171010101010004',
             'nama' => 'Siswa Import',
+            'wali_kelas' => 'Wali Impor',
+            'asal_sekolah' => 'SMP Impor',
+            'nama_orang_tua' => 'Bapak Import',
             'tempat_lahir' => 'Bandung',
             'tanggal_lahir' => '2010-01-15',
             'alamat' => 'Jl. Import',
@@ -335,8 +340,8 @@ class FrontendFeatureApiTest extends TestCase
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->fromArray([
-            ['nis', 'nama', 'tahunAjaran', 'kelas', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'alamat', 'email', 'telepon'],
-            ['SIS101', 'Siswa Excel', '2026/2027 Genap', '7B', 'Perempuan', 'Jakarta', '2011-02-16', 'Jl. Excel', 'sis101@example.test', '080000000101'],
+            ['nis', 'nisn', 'nik', 'nama', 'tahunAjaran', 'kelas', 'waliKelas', 'asalSekolah', 'namaOrangTua', 'jenisKelamin', 'tempatLahir', 'tanggalLahir', 'alamat', 'email', 'telepon'],
+            ['SIS101', '001122334456', '2171010101010005', 'Siswa Excel', '2026/2027 Genap', '7B', 'Wali Excel', 'SMP Excel', 'Ibu Excel', 'Perempuan', 'Jakarta', '2011-02-16', 'Jl. Excel', 'sis101@example.test', '080000000101'],
         ]);
 
         $path = tempnam(sys_get_temp_dir(), 'students-import-').'.xlsx';
@@ -364,7 +369,12 @@ class FrontendFeatureApiTest extends TestCase
 
         $this->assertDatabaseHas('students', [
             'nis' => 'SIS101',
+            'nisn' => '001122334456',
+            'nik' => '2171010101010005',
             'nama' => 'Siswa Excel',
+            'wali_kelas' => 'Wali Excel',
+            'asal_sekolah' => 'SMP Excel',
+            'nama_orang_tua' => 'Ibu Excel',
             'tempat_lahir' => 'Jakarta',
             'tanggal_lahir' => '2011-02-16',
             'alamat' => 'Jl. Excel',
