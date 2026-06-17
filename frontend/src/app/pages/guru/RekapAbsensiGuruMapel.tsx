@@ -49,7 +49,7 @@ const dayFromDate = (value?: string | null) => {
 };
 
 const extractCapaianPembelajaran = (value?: string | null) => {
-  const match = value?.match(/Capaian Pembelajaran:\s*([\s\S]*)/i);
+  const match = value?.match(/(?:Capaian|Topik) Pembelajaran:\s*([\s\S]*)/i);
 
   return match?.[1]?.trim() || '';
 };
@@ -266,11 +266,11 @@ export default function RekapAbsensiGuruMapel() {
 
         {hasSelectedFilters && selectedTanggalCapaian && (
           <div className="border-b border-gray-200 bg-blue-50 px-6 py-4">
-            <h4 className="text-sm font-semibold text-gray-900">Capaian Pembelajaran</h4>
+            <h4 className="text-sm font-semibold text-gray-900">Topik Pembelajaran</h4>
             <div className="mt-3 rounded-lg bg-white px-4 py-3 text-sm text-gray-700">
               <span className="font-medium text-gray-900">Tanggal {selectedTanggalCapaian}</span>
               <span className="mx-2 text-gray-400">-</span>
-              <span>{selectedCapaian || 'Belum ada capaian pembelajaran untuk tanggal ini.'}</span>
+              <span>{selectedCapaian || 'Belum ada topik pembelajaran untuk tanggal ini.'}</span>
             </div>
           </div>
         )}
@@ -297,7 +297,7 @@ export default function RekapAbsensiGuruMapel() {
                           ? 'bg-blue-50 text-[#2563EB] hover:bg-blue-100'
                           : 'hover:bg-gray-100'
                       }`}
-                      title="Lihat capaian pembelajaran"
+                      title="Lihat topik pembelajaran"
                     >
                       {tanggal}
                     </button>

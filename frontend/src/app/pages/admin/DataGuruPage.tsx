@@ -461,12 +461,12 @@ export default function DataGuruPage() {
                   </label>
                   <input
                     type="file"
-                    accept=".xlsx,.xls,.csv"
+                    accept=".xlsx,.csv"
                     onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-medium file:text-[#2563EB] hover:file:bg-blue-100"
                   />
                   <p className="mt-2 text-sm text-gray-500">
-                    Format yang didukung: `.xlsx`, `.xls`, atau `.csv`
+                    Format yang didukung: `.xlsx` atau `.csv`
                   </p>
                 </div>
 

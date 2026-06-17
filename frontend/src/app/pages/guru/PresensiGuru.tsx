@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, CircleCheck } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { apiGet, apiPost } from '../../lib/apiClient';
@@ -15,30 +15,40 @@ type PresensiStatus = 'hadir' | 'alpha' | 'sakit' | 'izin';
 const statusOptions: Array<{
   key: PresensiStatus;
   label: string;
+  headerClass: string;
+  headerActiveClass: string;
   selectedClass: string;
   hoverClass: string;
 }> = [
   {
     key: 'hadir',
     label: 'Hadir',
+    headerClass: 'text-green-700 hover:text-green-800 hover:bg-green-50',
+    headerActiveClass: 'bg-green-100 text-green-800 ring-1 ring-green-200',
     selectedClass: 'border-green-500 bg-green-50 text-green-700',
     hoverClass: 'hover:border-green-500 hover:text-green-700',
   },
   {
     key: 'alpha',
     label: 'Alpha',
+    headerClass: 'text-red-700 hover:text-red-800 hover:bg-red-50',
+    headerActiveClass: 'bg-red-100 text-red-800 ring-1 ring-red-200',
     selectedClass: 'border-red-500 bg-red-50 text-red-700',
     hoverClass: 'hover:border-red-500 hover:text-red-700',
   },
   {
     key: 'sakit',
     label: 'Sakit',
+    headerClass: 'text-amber-700 hover:text-amber-800 hover:bg-amber-50',
+    headerActiveClass: 'bg-amber-100 text-amber-800 ring-1 ring-amber-200',
     selectedClass: 'border-amber-500 bg-amber-50 text-amber-700',
     hoverClass: 'hover:border-amber-500 hover:text-amber-700',
   },
   {
     key: 'izin',
     label: 'Izin',
+    headerClass: 'text-blue-700 hover:text-blue-800 hover:bg-blue-50',
+    headerActiveClass: 'bg-blue-100 text-blue-800 ring-1 ring-blue-200',
     selectedClass: 'border-blue-500 bg-blue-50 text-blue-700',
     hoverClass: 'hover:border-blue-500 hover:text-blue-700',
   },
@@ -133,9 +143,6 @@ export default function PresensiGuru() {
     [presensi, siswaData]
   );
 
-  const isAllHadirSelected =
-    siswaData.length > 0 && siswaData.every((student) => presensi[student.id] === 'hadir');
-
   const handleToggle = (id: number, status: PresensiStatus) => {
     const nextStatus = presensi[id] === status ? null : status;
     setPresensi({ ...presensi, [id]: nextStatus });
@@ -145,22 +152,37 @@ export default function PresensiGuru() {
     }
   };
 
-  const handleSelectAllHadir = () => {
+  const bulkStatusSelections = useMemo(
+    () =>
+      statusOptions.map((status) => ({
+        ...status,
+        isActive:
+          siswaData.length > 0 &&
+          siswaData.every((student) => presensi[student.id] === status.key),
+      })),
+    [presensi, siswaData]
+  );
+
+  const handleSelectAllStatus = (status: PresensiStatus) => {
     if (siswaData.length === 0) {
       showToast('Belum ada data siswa untuk kelas ini.', 'error');
       return;
     }
 
-    const nextStatus = isAllHadirSelected ? null : 'hadir';
+    const isCurrentlyActive = siswaData.every((student) => presensi[student.id] === status);
+    const nextStatus = isCurrentlyActive ? null : status;
 
     setPresensi((current) => ({
       ...current,
       ...Object.fromEntries(siswaData.map((student) => [student.id, nextStatus])),
     }));
-    setKeterangan((current) => ({
-      ...current,
-      ...Object.fromEntries(siswaData.map((student) => [student.id, ''])),
-    }));
+
+    if (nextStatus !== 'izin') {
+      setKeterangan((current) => ({
+        ...current,
+        ...Object.fromEntries(siswaData.map((student) => [student.id, ''])),
+      }));
+    }
   };
 
   const handleKeteranganChange = (id: number, value: string) => {
@@ -177,7 +199,7 @@ export default function PresensiGuru() {
     }
 
     if (capaian) {
-      parts.push(`Capaian Pembelajaran: ${capaian}`);
+      parts.push(`Topik Pembelajaran: ${capaian}`);
     }
 
     return parts.length > 0 ? parts.join('\n') : null;
@@ -310,32 +332,24 @@ export default function PresensiGuru() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-gray-200 p-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="w-full flex-1">
-            <h3 className="font-semibold text-gray-900">Daftar Siswa - Kelas {selectedKelas || '-'}</h3>
-            <div className="mt-4">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Capaian Pembelajaran
+                Topik Pembelajaran
               </label>
               <textarea
                 value={capaianPembelajaran}
                 onChange={(event) => setCapaianPembelajaran(event.target.value)}
                 rows={2}
-                placeholder="Tuliskan capaian pembelajaran pada pertemuan ini"
+                placeholder="Tuliskan topik pembelajaran pada pertemuan ini"
                 className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
               />
             </div>
-            <p className="mt-3 text-sm font-medium text-gray-700">
-              Pilih satu status presensi untuk setiap siswa
-            </p>
+            <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <p className="text-sm font-medium text-gray-700">
+                Pilih satu status presensi untuk setiap siswa
+              </p>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleSelectAllHadir}
-            disabled={siswaData.length === 0}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition-all hover:border-green-300 hover:bg-green-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
-          >
-            <CircleCheck size={18} strokeWidth={2.5} />
-            Hadir Semua
-          </button>
         </div>
 
         <div className="overflow-x-auto">
@@ -345,12 +359,25 @@ export default function PresensiGuru() {
                 <th className="w-14 px-4 py-3 text-center text-xs font-semibold uppercase text-gray-600">No</th>
                 <th className="w-28 px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">NIS</th>
                 <th className="w-64 px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Nama Siswa</th>
-                {statusOptions.map((status) => (
+                {bulkStatusSelections.map((status) => (
                   <th
                     key={status.key}
                     className="w-20 px-2 py-3 text-center text-xs font-semibold uppercase text-gray-600"
                   >
-                    {status.label}
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllStatus(status.key)}
+                      disabled={siswaData.length === 0}
+                      aria-label={`${status.label} semua siswa`}
+                      title={`${status.label} semua siswa`}
+                      className={`inline-flex min-w-[72px] items-center justify-center rounded-md px-2 py-2 text-xs font-bold uppercase tracking-wide transition-all disabled:cursor-not-allowed disabled:text-gray-300 ${
+                        status.isActive
+                          ? status.headerActiveClass
+                          : status.headerClass
+                      }`}
+                    >
+                      {status.label}
+                    </button>
                   </th>
                 ))}
                 <th className="w-64 px-4 py-3 text-left text-xs font-semibold uppercase text-gray-600">Keterangan</th>

@@ -26,10 +26,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Maatwebsite\Excel\Concerns\WithFormatData;
-use Maatwebsite\Excel\Facades\Excel;
-use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use Symfony\Component\HttpFoundation\Response;
+use ZipArchive;
 
 class FrontendFeatureController extends Controller
 {
@@ -47,6 +45,7 @@ class FrontendFeatureController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
+            'studentId' => ['nullable', 'integer'],
             'nama' => ['required', 'string', 'max:255'],
             'email' => [
                 'nullable',
@@ -57,6 +56,15 @@ class FrontendFeatureController extends Controller
             'telepon' => ['nullable', 'string', 'max:255'],
             'alamat' => ['nullable', 'string'],
             'tanggalLahir' => ['nullable', 'date'],
+            'nisn' => ['nullable', 'string', 'max:255', 'regex:/^[0-9]+$/'],
+            'nik' => ['nullable', 'string', 'max:255', 'regex:/^[0-9]+$/'],
+            'tahunAjaran' => ['nullable', 'string', 'max:255'],
+            'kelas' => ['nullable', 'string', 'max:255'],
+            'waliKelas' => ['nullable', 'string', 'max:255'],
+            'asalSekolah' => ['nullable', 'string', 'max:255'],
+            'namaOrangTua' => ['nullable', 'string', 'max:255'],
+            'jenisKelamin' => ['nullable', 'string', 'max:255'],
+            'tempatLahir' => ['nullable', 'string', 'max:255'],
         ]);
 
         DB::transaction(function () use ($user, $data): void {
@@ -507,18 +515,33 @@ class FrontendFeatureController extends Controller
     private function profilePayload(User $user, Request $request): array
     {
         $profile = UserProfile::query()->where('user_id', $user->id)->first();
-        $student = Student::query()->where('nis', $user->username)->first();
+        $studentId = isset($data['studentId']) ? (int) $data['studentId'] : null;
+        $student = Student::query()
+            ->when($studentId !== null, fn ($query) => $query->whereKey($studentId))
+            ->where('nis', $user->username)
+            ->first();
         $teacher = Teacher::query()->where('nip', $user->username)->first();
 
         return [
+            'studentId' => $student?->id,
             'username' => $user->username,
             'role' => $user->frontendRole(),
             'guruAccess' => $user->guruAccess(),
             'nama' => $student?->nama ?? $teacher?->nama ?? $user->name,
             'email' => $student?->email ?? $teacher?->email ?? $user->email,
             'telepon' => $student?->telepon ?? $teacher?->telepon ?? $profile?->telepon,
-            'alamat' => $profile?->alamat,
-            'tanggalLahir' => $profile?->tanggal_lahir?->format('Y-m-d'),
+            'alamat' => $student?->alamat ?? $profile?->alamat,
+            'tanggalLahir' => $this->safeDateForFrontend($student?->tanggal_lahir)
+                ?? $this->safeDateForFrontend($profile?->tanggal_lahir),
+            'nisn' => $student?->nisn,
+            'nik' => $student?->nik,
+            'tahunAjaran' => $student?->tahun_ajaran,
+            'kelas' => $student?->kelas,
+            'waliKelas' => $student?->wali_kelas,
+            'asalSekolah' => $student?->asal_sekolah,
+            'namaOrangTua' => $student?->nama_orang_tua,
+            'jenisKelamin' => $student?->jenis_kelamin,
+            'tempatLahir' => $student?->tempat_lahir,
             'fotoProfil' => $this->profilePhotoUrl($profile, $request),
         ];
     }
@@ -532,6 +555,27 @@ class FrontendFeatureController extends Controller
         $version = substr(sha1($profile->profile_photo), 0, 12);
 
         return '/api/profile/photo-content?v='.$version;
+    }
+
+    private function safeDateForFrontend(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (is_string($value)) {
+            try {
+                return Carbon::parse($value)->format('Y-m-d');
+            } catch (\Throwable) {
+                return trim($value) !== '' ? trim($value) : null;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -571,6 +615,17 @@ class FrontendFeatureController extends Controller
                 'nama' => trim($data['nama']),
                 'email' => $data['email'] ? trim($data['email']) : null,
                 'telepon' => isset($data['telepon']) ? trim($data['telepon']) : null,
+                'alamat' => isset($data['alamat']) ? trim($data['alamat']) : null,
+                'tanggal_lahir' => $data['tanggalLahir'] ?? null,
+                'nisn' => isset($data['nisn']) ? trim($data['nisn']) : null,
+                'nik' => isset($data['nik']) ? trim($data['nik']) : null,
+                'tahun_ajaran' => isset($data['tahunAjaran']) ? trim($data['tahunAjaran']) : $student->tahun_ajaran,
+                'kelas' => isset($data['kelas']) ? trim($data['kelas']) : $student->kelas,
+                'wali_kelas' => isset($data['waliKelas']) ? trim($data['waliKelas']) : null,
+                'asal_sekolah' => isset($data['asalSekolah']) ? trim($data['asalSekolah']) : null,
+                'nama_orang_tua' => isset($data['namaOrangTua']) ? trim($data['namaOrangTua']) : null,
+                'jenis_kelamin' => isset($data['jenisKelamin']) ? trim($data['jenisKelamin']) : $student->jenis_kelamin,
+                'tempat_lahir' => isset($data['tempatLahir']) ? trim($data['tempatLahir']) : null,
             ]);
 
             StudentGrade::query()->where('nis', $student->nis)->update(['nama' => trim($data['nama'])]);
@@ -605,16 +660,12 @@ class FrontendFeatureController extends Controller
     private function rowsFromUploadedFile(UploadedFile $file): array
     {
         try {
-            $sheets = Excel::toArray(new class implements WithFormatData
-            {
-            }, $file);
+            $rows = $this->rawRowsFromUploadedFile($file);
         } catch (\Throwable) {
             throw ValidationException::withMessages([
                 'file' => 'File import tidak dapat dibaca. Pastikan format file adalah XLSX, XLS, atau CSV yang valid.',
             ]);
         }
-
-        $rows = $sheets[0] ?? [];
 
         if (count($rows) < 2) {
             throw ValidationException::withMessages([
@@ -665,6 +716,223 @@ class FrontendFeatureController extends Controller
         return $dataRows;
     }
 
+    /**
+     * @return list<list<mixed>>
+     */
+    private function rawRowsFromUploadedFile(UploadedFile $file): array
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        return match ($extension) {
+            'csv' => $this->rowsFromCsvFile($file),
+            'xlsx' => $this->rowsFromXlsxFile($file),
+            default => throw ValidationException::withMessages([
+                'file' => 'Format file belum didukung. Gunakan file XLSX atau CSV.',
+            ]),
+        };
+    }
+
+    /**
+     * @return list<list<mixed>>
+     */
+    private function rowsFromCsvFile(UploadedFile $file): array
+    {
+        $handle = fopen($file->getRealPath(), 'rb');
+
+        if ($handle === false) {
+            throw new \RuntimeException('CSV file cannot be opened.');
+        }
+
+        $rows = [];
+
+        try {
+            while (($row = fgetcsv($handle)) !== false) {
+                $rows[] = array_map(
+                    static fn ($value) => is_string($value) ? trim($value) : $value,
+                    $row,
+                );
+            }
+        } finally {
+            fclose($handle);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return list<list<mixed>>
+     */
+    private function rowsFromXlsxFile(UploadedFile $file): array
+    {
+        $zip = new ZipArchive();
+        $opened = $zip->open($file->getRealPath());
+
+        if ($opened !== true) {
+            throw new \RuntimeException('XLSX file cannot be opened.');
+        }
+
+        try {
+            $sheetPath = $this->firstWorksheetPathFromArchive($zip);
+            $sheetXml = $zip->getFromName($sheetPath);
+
+            if ($sheetXml === false) {
+                throw new \RuntimeException('Worksheet XML not found.');
+            }
+
+            $sharedStrings = $this->sharedStringsFromArchive($zip);
+
+            return $this->rowsFromWorksheetXml($sheetXml, $sharedStrings);
+        } finally {
+            $zip->close();
+        }
+    }
+
+    private function firstWorksheetPathFromArchive(ZipArchive $zip): string
+    {
+        $worksheetPaths = [];
+
+        for ($index = 0; $index < $zip->numFiles; $index++) {
+            $name = $zip->getNameIndex($index);
+
+            if (is_string($name) && preg_match('#^xl/worksheets/sheet\d+\.xml$#i', $name)) {
+                $worksheetPaths[] = $name;
+            }
+        }
+
+        if ($worksheetPaths === []) {
+            throw new \RuntimeException('Worksheet file not found.');
+        }
+
+        natsort($worksheetPaths);
+
+        return array_values($worksheetPaths)[0];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function sharedStringsFromArchive(ZipArchive $zip): array
+    {
+        $xml = $zip->getFromName('xl/sharedStrings.xml');
+
+        if ($xml === false) {
+            return [];
+        }
+
+        $document = simplexml_load_string($xml);
+
+        if ($document === false) {
+            throw new \RuntimeException('Shared strings XML is invalid.');
+        }
+
+        $strings = [];
+
+        foreach ($document->xpath('/*[local-name()="sst"]/*[local-name()="si"]') ?: [] as $item) {
+            $textNodes = $item->xpath('./*[local-name()="t"]') ?: [];
+
+            if ($textNodes !== []) {
+                $strings[] = (string) $textNodes[0];
+                continue;
+            }
+
+            $parts = [];
+
+            foreach ($item->xpath('./*[local-name()="r"]/*[local-name()="t"]') ?: [] as $textNode) {
+                $parts[] = (string) $textNode;
+            }
+
+            $strings[] = implode('', $parts);
+        }
+
+        return $strings;
+    }
+
+    /**
+     * @param list<string> $sharedStrings
+     * @return list<list<mixed>>
+     */
+    private function rowsFromWorksheetXml(string $sheetXml, array $sharedStrings): array
+    {
+        $document = simplexml_load_string($sheetXml);
+
+        if ($document === false) {
+            throw new \RuntimeException('Worksheet XML is invalid.');
+        }
+
+        $rows = [];
+
+        foreach ($document->xpath('/*[local-name()="worksheet"]/*[local-name()="sheetData"]/*[local-name()="row"]') ?: [] as $rowNode) {
+            $row = [];
+
+            foreach ($rowNode->xpath('./*[local-name()="c"]') ?: [] as $cellNode) {
+                $reference = (string) ($cellNode['r'] ?? '');
+                $columnIndex = $this->xlsxColumnIndexFromReference($reference);
+
+                if ($columnIndex < 0) {
+                    continue;
+                }
+
+                $row[$columnIndex] = $this->xlsxCellValue($cellNode, $sharedStrings);
+            }
+
+            if ($row !== []) {
+                ksort($row);
+                $maxIndex = max(array_keys($row));
+                $normalizedRow = [];
+
+                for ($index = 0; $index <= $maxIndex; $index++) {
+                    $normalizedRow[] = $row[$index] ?? '';
+                }
+
+                $rows[] = $normalizedRow;
+            }
+        }
+
+        return $rows;
+    }
+
+    private function xlsxColumnIndexFromReference(string $reference): int
+    {
+        if (! preg_match('/^[A-Z]+/i', $reference, $matches)) {
+            return -1;
+        }
+
+        $letters = strtoupper($matches[0]);
+        $index = 0;
+
+        for ($position = 0; $position < strlen($letters); $position++) {
+            $index = ($index * 26) + (ord($letters[$position]) - 64);
+        }
+
+        return $index - 1;
+    }
+
+    /**
+     * @param list<string> $sharedStrings
+     */
+    private function xlsxCellValue(\SimpleXMLElement $cellNode, array $sharedStrings): mixed
+    {
+        $type = (string) ($cellNode['t'] ?? '');
+
+        if ($type === 'inlineStr') {
+            return trim((string) ($cellNode->is->t ?? ''));
+        }
+
+        $value = isset($cellNode->v) ? (string) $cellNode->v : '';
+
+        if ($type === 's') {
+            $sharedIndex = (int) $value;
+
+            return $sharedStrings[$sharedIndex] ?? '';
+        }
+
+        if ($type === 'b') {
+            return $value === '1' ? '1' : '0';
+        }
+
+        return trim($value);
+    }
+
     private function normalizeImportedCell(mixed $value): string
     {
         if ($value === null) {
@@ -687,11 +955,18 @@ class FrontendFeatureController extends Controller
         }
 
         if (is_numeric($value)) {
-            try {
-                return ExcelDate::excelToDateTimeObject((float) $value)->format('Y-m-d');
-            } catch (\Throwable) {
-                return $value;
+            $excelDate = (float) $value;
+
+            if ($excelDate > 0) {
+                try {
+                    return Carbon::createFromTimestampUTC((int) round(($excelDate - 25569) * 86400))
+                        ->format('Y-m-d');
+                } catch (\Throwable) {
+                    return $value;
+                }
             }
+
+            return $value;
         }
 
         foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'm/d/Y'] as $format) {

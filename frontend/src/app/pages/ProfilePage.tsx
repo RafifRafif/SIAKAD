@@ -18,6 +18,7 @@ import {
 import { Button } from '../components/ui/button';
 
 interface ProfileResponse {
+  studentId?: number | null;
   username: string;
   role: AppRole;
   guruAccess?: GuruAccess[];
@@ -26,6 +27,15 @@ interface ProfileResponse {
   telepon?: string | null;
   alamat?: string | null;
   tanggalLahir?: string | null;
+  nisn?: string | null;
+  nik?: string | null;
+  tahunAjaran?: string | null;
+  kelas?: string | null;
+  waliKelas?: string | null;
+  asalSekolah?: string | null;
+  namaOrangTua?: string | null;
+  jenisKelamin?: string | null;
+  tempatLahir?: string | null;
   fotoProfil?: string | null;
 }
 
@@ -34,9 +44,11 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [profileRoleLabel, setProfileRoleLabel] = useState('');
+  const [profileRole, setProfileRole] = useState<AppRole>('siswa');
   const [identifierLabel, setIdentifierLabel] = useState('Akun');
   const [identifierValue, setIdentifierValue] = useState('');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [studentId, setStudentId] = useState<number | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const previewPhotoUrlRef = useRef<string | null>(null);
@@ -47,6 +59,15 @@ export default function ProfilePage() {
     telepon: '',
     alamat: '',
     tanggalLahir: '',
+    nisn: '',
+    nik: '',
+    tahunAjaran: '',
+    kelas: '',
+    waliKelas: '',
+    asalSekolah: '',
+    namaOrangTua: '',
+    jenisKelamin: '',
+    tempatLahir: '',
   });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -73,7 +94,10 @@ export default function ProfilePage() {
     e.preventDefault();
 
     try {
-      const profile = await apiPut<ProfileResponse>('/api/profile', formData);
+      const profile = await apiPut<ProfileResponse>('/api/profile', {
+        ...formData,
+        studentId,
+      });
       applyProfile(profile);
       showToast('Profile berhasil diupdate!', 'success');
       setIsEditing(false);
@@ -176,8 +200,10 @@ export default function ProfilePage() {
     .join('');
 
   const applyProfile = (profile: ProfileResponse) => {
+    setProfileRole(profile.role);
+    setStudentId(profile.studentId ?? null);
     setProfileRoleLabel(profileRoleLabelFromProfile(profile));
-    setIdentifierLabel('Akun');
+    setIdentifierLabel(profile.role === 'siswa' ? 'NIS' : 'Akun');
     setIdentifierValue(profile.username);
     void loadProfilePhoto(profile.fotoProfil ?? null);
     setFormData({
@@ -186,8 +212,19 @@ export default function ProfilePage() {
       telepon: profile.telepon ?? '',
       alamat: profile.alamat ?? '',
       tanggalLahir: profile.tanggalLahir ?? '',
+      nisn: profile.nisn ?? '',
+      nik: profile.nik ?? '',
+      tahunAjaran: profile.tahunAjaran ?? '',
+      kelas: profile.kelas ?? '',
+      waliKelas: profile.waliKelas ?? '',
+      asalSekolah: profile.asalSekolah ?? '',
+      namaOrangTua: profile.namaOrangTua ?? '',
+      jenisKelamin: profile.jenisKelamin ?? '',
+      tempatLahir: profile.tempatLahir ?? '',
     });
   };
+
+  const isStudentProfile = profileRole === 'siswa';
 
   const loadProfilePhoto = async (photoUrl: string | null) => {
     const requestId = photoLoadRequestRef.current + 1;
@@ -322,6 +359,36 @@ export default function ProfilePage() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid md:grid-cols-2 gap-6">
+                {isStudentProfile && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NISN
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nisn}
+                        onChange={(e) => setFormData({ ...formData, nisn: e.target.value.replace(/\D/g, '') })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NIK
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nik}
+                        onChange={(e) => setFormData({ ...formData, nik: e.target.value.replace(/\D/g, '') })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Nama Lengkap
@@ -375,6 +442,101 @@ export default function ProfilePage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
                   />
                 </div>
+
+                {isStudentProfile && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Jenis Kelamin
+                      </label>
+                      <select
+                        value={formData.jenisKelamin}
+                        onChange={(e) => setFormData({ ...formData, jenisKelamin: e.target.value })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      >
+                        <option value="">Pilih Jenis Kelamin</option>
+                        <option value="Laki-laki">Laki-laki</option>
+                        <option value="Perempuan">Perempuan</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tempat Lahir
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tempatLahir}
+                        onChange={(e) => setFormData({ ...formData, tempatLahir: e.target.value })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tahun Ajaran
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tahunAjaran}
+                        disabled
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-gray-50 text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Kelas
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.kelas}
+                        disabled
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-gray-50 text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Wali Kelas
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.waliKelas}
+                        disabled
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-gray-50 text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Asal Sekolah
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.asalSekolah}
+                        onChange={(e) => setFormData({ ...formData, asalSekolah: e.target.value })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Nama Orang Tua
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.namaOrangTua}
+                        onChange={(e) => setFormData({ ...formData, namaOrangTua: e.target.value })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               <div>

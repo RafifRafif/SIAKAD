@@ -24,6 +24,13 @@ class Student extends Model
         'telepon',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'tanggal_lahir' => 'date:Y-m-d',
+        ];
+    }
+
     /**
      * @return array{id: int, nis: string, nisn: ?string, nik: ?string, nama: string, tahunAjaran: string, kelas: string, waliKelas: ?string, asalSekolah: ?string, namaOrangTua: ?string, jenisKelamin: string, tempatLahir: ?string, tanggalLahir: ?string, alamat: ?string, email: ?string, telepon: ?string}
      */
@@ -42,7 +49,9 @@ class Student extends Model
             'namaOrangTua' => $this->nama_orang_tua,
             'jenisKelamin' => $this->jenis_kelamin,
             'tempatLahir' => $this->tempat_lahir,
-            'tanggalLahir' => $this->tanggal_lahir,
+            'tanggalLahir' => $this->tanggal_lahir instanceof \DateTimeInterface
+                ? $this->tanggal_lahir->format('Y-m-d')
+                : (is_string($this->tanggal_lahir) ? $this->tanggal_lahir : null),
             'alamat' => $this->alamat,
             'email' => $this->email,
             'telepon' => $this->telepon,

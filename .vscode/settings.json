@@ -21,7 +21,7 @@
                           "package.json":  true,
                           "next-env.d.ts":  true
                       },
-    "explorer.openEditors.visible":  0,
+    "explorer.openEditors.visible":  1,
     "search.exclude":  {
                            "package-lock.json":  true,
                            "frontend/tsconfig.tsbuildinfo":  true,

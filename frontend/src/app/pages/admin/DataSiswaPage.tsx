@@ -8,6 +8,7 @@ import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfi
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
+import { defaultGuruData, type GuruItem } from '../../lib/guruStore';
 import { type KelasItem } from '../../lib/kelasStore';
 import { defaultSiswaData, type StudentItem as Student } from '../../lib/siswaStore';
 import {
@@ -25,6 +26,7 @@ export default function DataSiswaPage() {
   const [tahunAjaranOptions, setTahunAjaranOptions] = useState<TahunAjaranItem[]>(
     defaultTahunAjaranData
   );
+  const [guruOptions, setGuruOptions] = useState<GuruItem[]>(defaultGuruData);
   const [kelasOptions, setKelasOptions] = useState<KelasItem[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -70,6 +72,12 @@ export default function DataSiswaPage() {
     void apiGet<KelasItem[]>('/api/school-classes')
       .then(setKelasOptions)
       .catch(() => showToast('Gagal memuat data kelas dari backend.', 'error'));
+  }, []);
+
+  useEffect(() => {
+    void apiGet<GuruItem[]>('/api/teachers')
+      .then(setGuruOptions)
+      .catch(() => showToast('Gagal memuat data guru dari backend.', 'error'));
   }, []);
 
   const tahunAjaranList = useMemo(
@@ -270,6 +278,13 @@ export default function DataSiswaPage() {
     }
   };
 
+  const handleNumericFieldChange = (field: 'nis' | 'nisn' | 'nik', value: string) => {
+    setFormData((current) => ({
+      ...current,
+      [field]: value.replace(/\D/g, ''),
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -333,6 +348,15 @@ export default function DataSiswaPage() {
       ),
     ],
     [kelasOptions, students]
+  );
+
+  const waliKelasList = useMemo(
+    () =>
+      guruOptions
+        .filter((guru) => guru.status === 'Aktif' && guru.role.includes('Wali Kelas'))
+        .filter((guru) => !formData.tahunAjaran || guru.tahunAjaran === formData.tahunAjaran)
+        .map((guru) => guru.nama),
+    [formData.tahunAjaran, guruOptions]
   );
 
   useEffect(() => {
@@ -647,12 +671,12 @@ export default function DataSiswaPage() {
                   </label>
                   <input
                     type="file"
-                    accept=".xlsx,.xls,.csv"
+                    accept=".xlsx,.csv"
                     onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
                     className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-medium file:text-[#2563EB] hover:file:bg-blue-100"
                   />
                   <p className="mt-2 text-sm text-gray-500">
-                    Format yang didukung: `.xlsx`, `.xls`, atau `.csv`
+                    Format yang didukung: `.xlsx` atau `.csv`
                   </p>
                 </div>
 
@@ -726,8 +750,10 @@ export default function DataSiswaPage() {
                       <input
                         type="text"
                         required
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={formData.nis}
-                        onChange={(e) => setFormData({ ...formData, nis: e.target.value })}
+                        onChange={(e) => handleNumericFieldChange('nis', e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
                       />
                     </div>
@@ -738,8 +764,10 @@ export default function DataSiswaPage() {
                       </label>
                       <input
                         type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={formData.nisn}
-                        onChange={(e) => setFormData({ ...formData, nisn: e.target.value })}
+                        onChange={(e) => handleNumericFieldChange('nisn', e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
                       />
                     </div>
@@ -750,8 +778,10 @@ export default function DataSiswaPage() {
                       </label>
                       <input
                         type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={formData.nik}
-                        onChange={(e) => setFormData({ ...formData, nik: e.target.value })}
+                        onChange={(e) => handleNumericFieldChange('nik', e.target.value)}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
                       />
                     </div>
@@ -815,12 +845,18 @@ export default function DataSiswaPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Wali Kelas
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={formData.waliKelas}
                         onChange={(e) => setFormData({ ...formData, waliKelas: e.target.value })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
-                      />
+                      >
+                        <option value="">Pilih wali kelas</option>
+                        {waliKelasList.map((guru) => (
+                          <option key={guru} value={guru}>
+                            {guru}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
