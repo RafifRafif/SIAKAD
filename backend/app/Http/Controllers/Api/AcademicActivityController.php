@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AcademicYear;
 use App\Models\AttendanceRecord;
+use App\Models\LearningAssignment;
 use App\Models\QuranSubmission;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\Teacher;
+use App\Models\Subject;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -56,6 +59,8 @@ class AcademicActivityController extends Controller
     public function grades(Request $request): JsonResponse
     {
         $query = StudentGrade::query()->orderByDesc('tanggal')->orderByDesc('id');
+
+        $this->applyAcademicYearScope($query, 'tahun_ajaran', $request);
 
         if ($request->user()?->hasRole(User::ROLE_SISWA)) {
             $query->where('nis', $request->user()->username);
@@ -143,6 +148,8 @@ class AcademicActivityController extends Controller
     {
         $query = AttendanceRecord::query()->orderByDesc('tanggal')->orderBy('nama');
 
+        $this->applyAcademicYearScope($query, 'tahun_ajaran', $request);
+
         if ($request->user()?->hasRole(User::ROLE_SISWA)) {
             $query->where('nis', $request->user()->username);
         } elseif ($request->filled('nis')) {
@@ -224,6 +231,8 @@ class AcademicActivityController extends Controller
         $query = QuranSubmission::query()->orderByDesc('tanggal')->orderBy('nama');
         $studentNis = $this->studentNisForRequest($request);
 
+        $this->applyQuranAcademicYearScope($query, $request);
+
         if ($studentNis !== null) {
             $query->where('nis', $studentNis);
         } elseif ($request->filled('nis')) {
@@ -290,6 +299,26 @@ class AcademicActivityController extends Controller
         $attendanceBase = AttendanceRecord::query();
         $gradeBase = StudentGrade::query();
         $quranBase = QuranSubmission::query();
+        $siswaGrades = StudentGrade::query()->latest();
+        $siswaAttendance = AttendanceRecord::query()->latest();
+        $siswaQuran = QuranSubmission::query()->latest();
+        $adminStudents = Student::query();
+        $adminTeachers = Teacher::query();
+        $adminClasses = SchoolClass::query();
+        $adminSubjects = Subject::query();
+        $adminAssignments = LearningAssignment::query();
+
+        $this->applyAcademicYearScope($attendanceBase, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($gradeBase, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($siswaGrades, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($siswaAttendance, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($adminStudents, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($adminTeachers, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($adminClasses, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($adminSubjects, 'tahun_ajaran', $request);
+        $this->applyAcademicYearScope($adminAssignments, 'tahun_ajaran', $request);
+        $this->applyQuranAcademicYearScope($quranBase, $request);
+        $this->applyQuranAcademicYearScope($siswaQuran, $request);
 
         $this->applySummaryFilters($attendanceBase, $request);
         $this->applySummaryFilters($gradeBase, $request);
@@ -303,9 +332,6 @@ class AcademicActivityController extends Controller
             ->whereIn('status', ['hadir', 'Hadir'])
             ->count();
         $averageGrade = (clone $gradeBase)->avg('nilai');
-        $siswaGrades = StudentGrade::query()->latest();
-        $siswaAttendance = AttendanceRecord::query()->latest();
-        $siswaQuran = QuranSubmission::query()->latest();
         $studentNis = $this->studentNisForRequest($request);
 
         if ($studentNis !== null) {
@@ -317,8 +343,11 @@ class AcademicActivityController extends Controller
 
         return response()->json([
             'admin' => [
-                'totalSiswa' => Student::query()->count(),
-                'totalGuru' => Teacher::query()->count(),
+                'totalSiswa' => $adminStudents->count(),
+                'totalGuru' => $adminTeachers->count(),
+                'totalKelas' => $adminClasses->count(),
+                'totalPelajaran' => $adminSubjects->count(),
+                'totalPembelajaran' => $adminAssignments->count(),
                 'presensiHariIni' => $attendanceTotal > 0
                     ? round(($attendancePresent / $attendanceTotal) * 100, 1)
                     : null,
@@ -355,6 +384,39 @@ class AcademicActivityController extends Controller
                 }
             }
         }
+    }
+
+    private function applyAcademicYearScope($query, string $column, Request $request): void
+    {
+        $tahunAjaran = $this->resolvedAcademicYear($request);
+
+        if ($tahunAjaran === null) {
+            if (! $request->filled('tahunAjaran') || $request->string('tahunAjaran') === 'all') {
+                $query->whereRaw('1 = 0');
+            }
+
+            return;
+        }
+
+        $query->where($column, $tahunAjaran);
+    }
+
+    private function applyQuranAcademicYearScope($query, Request $request): void
+    {
+        $academicYear = $this->resolvedAcademicYearModel($request);
+
+        if ($academicYear === null) {
+            if (! $request->filled('tahunAjaran') || $request->string('tahunAjaran') === 'all') {
+                $query->whereRaw('1 = 0');
+            }
+
+            return;
+        }
+
+        $query->whereBetween('tanggal', [
+            $academicYear->tanggal_mulai?->format('Y-m-d'),
+            $academicYear->tanggal_selesai?->format('Y-m-d'),
+        ]);
     }
 
     private function applyTeacherReadScope($query, Request $request, string $tableName): void
@@ -459,6 +521,42 @@ class AcademicActivityController extends Controller
         }
 
         $query->where('guru', $teacherName);
+    }
+
+    private function resolvedAcademicYear(Request $request): ?string
+    {
+        if ($request->filled('tahunAjaran') && $request->string('tahunAjaran') !== 'all') {
+            return (string) $request->string('tahunAjaran');
+        }
+
+        $activeAcademicYear = $this->activeAcademicYear();
+
+        if ($activeAcademicYear === null) {
+            return null;
+        }
+
+        return trim($activeAcademicYear->nama.' '.$activeAcademicYear->semester);
+    }
+
+    private function resolvedAcademicYearModel(Request $request): ?AcademicYear
+    {
+        if ($request->filled('tahunAjaran') && $request->string('tahunAjaran') !== 'all') {
+            $requestedValue = trim((string) $request->string('tahunAjaran'));
+
+            return AcademicYear::query()
+                ->get()
+                ->first(fn (AcademicYear $item) => trim($item->nama.' '.$item->semester) === $requestedValue);
+        }
+
+        return $this->activeAcademicYear();
+    }
+
+    private function activeAcademicYear(): ?AcademicYear
+    {
+        return AcademicYear::query()
+            ->where('status', 'Aktif')
+            ->latest('id')
+            ->first();
     }
 
     /**

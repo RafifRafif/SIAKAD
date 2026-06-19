@@ -975,6 +975,9 @@
   .max-w-\[200px\] {
     max-width: 200px;
   }
+  .max-w-\[430px\] {
+    max-width: 430px;
+  }
   .max-w-\[calc\(100\%-2rem\)\] {
     max-width: calc(100% - 2rem);
   }
@@ -3785,11 +3788,6 @@
   .disabled\:cursor-not-allowed {
     &:disabled {
       cursor: not-allowed;
-    }
-  }
-  .disabled\:border-gray-200 {
-    &:disabled {
-      border-color: var(--color-gray-200);
     }
   }
   .disabled\:border-gray-300 {

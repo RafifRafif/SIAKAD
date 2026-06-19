@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Edit, Trash2, X, Upload, Download } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, Upload, Download, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
@@ -29,6 +29,7 @@ export default function DataGuruPage() {
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingGuru, setEditingGuru] = useState<Guru | null>(null);
+  const [detailGuru, setDetailGuru] = useState<Guru | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,9 +38,16 @@ export default function DataGuruPage() {
 
   const [formData, setFormData] = useState({
     nip: '',
+    nuptk: '',
+    nik: '',
     nama: '',
     tahunAjaran: '',
     role: ['Guru Mapel'] as ('Wali Kelas' | 'Guru Mapel')[],
+    tempatLahir: '',
+    tanggalLahir: '',
+    jabatan: '',
+    alamat: '',
+    sapaan: '' as '' | 'Ustad' | 'Ustadzah',
     email: '',
     telepon: '',
     status: 'Aktif' as 'Aktif' | 'Cuti',
@@ -67,10 +75,15 @@ export default function DataGuruPage() {
   );
 
   const filteredGuru = guru.filter((g) => {
+    const lowerQuery = searchQuery.toLowerCase();
     const matchesSearch =
-      g.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      g.nama.toLowerCase().includes(lowerQuery) ||
       g.nip.includes(searchQuery) ||
-      g.role.some((role) => role.toLowerCase().includes(searchQuery.toLowerCase()));
+      (g.nuptk ?? '').includes(searchQuery) ||
+      (g.nik ?? '').includes(searchQuery) ||
+      (g.jabatan ?? '').toLowerCase().includes(lowerQuery) ||
+      (g.sapaan ?? '').toLowerCase().includes(lowerQuery) ||
+      g.role.some((role) => role.toLowerCase().includes(lowerQuery));
     const matchesTahunAjaran =
       filterTahunAjaran !== '' && g.tahunAjaran === filterTahunAjaran;
     return matchesSearch && matchesTahunAjaran;
@@ -93,9 +106,16 @@ export default function DataGuruPage() {
     setEditingGuru(null);
     setFormData({
       nip: '',
+      nuptk: '',
+      nik: '',
       nama: '',
       tahunAjaran: '',
       role: ['Guru Mapel'],
+      tempatLahir: '',
+      tanggalLahir: '',
+      jabatan: '',
+      alamat: '',
+      sapaan: '',
       email: '',
       telepon: '',
       status: 'Aktif',
@@ -112,33 +132,54 @@ export default function DataGuruPage() {
     const rows = [
       {
         nip: '1234567890',
+        nuptk: '1122334455667788',
+        nik: '2171010101010001',
         nama: 'Ahmad Fauzi',
         tahunAjaran: '2026/2027 Ganjil',
         role: 'Guru Mapel',
+        tempatLahir: 'Batam',
+        tanggalLahir: '1990-01-10',
+        jabatan: 'Guru IPA',
+        alamat: 'Jl. Ahmad Yani No. 1',
+        sapaan: 'Ustad',
         email: 'ahmad.guru@example.com',
         telepon: '081234567890',
         status: 'Aktif',
       },
       {
         nip: '1234567891',
+        nuptk: '2233445566778899',
+        nik: '2171010202020002',
         nama: 'Siti Aminah',
         tahunAjaran: '2026/2027 Ganjil',
         role: 'Guru Mapel, Wali Kelas',
+        tempatLahir: 'Tanjung Pinang',
+        tanggalLahir: '1992-02-20',
+        jabatan: 'Wali Kelas X-1',
+        alamat: 'Jl. Engku Putri No. 2',
+        sapaan: 'Ustadzah',
         email: 'siti.guru@example.com',
         telepon: '081234567891',
         status: 'Aktif',
       },
     ];
     const worksheet = XLSX.utils.json_to_sheet(rows, {
-      header: ['nip', 'nama', 'tahunAjaran', 'role', 'email', 'telepon', 'status'],
+      header: ['nip', 'nuptk', 'nik', 'nama', 'tahunAjaran', 'role', 'tempatLahir', 'tanggalLahir', 'jabatan', 'alamat', 'sapaan', 'email', 'telepon', 'status'],
     });
     const workbook = XLSX.utils.book_new();
 
     worksheet['!cols'] = [
       { wch: 14 },
+      { wch: 18 },
+      { wch: 20 },
       { wch: 24 },
       { wch: 18 },
       { wch: 24 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 20 },
+      { wch: 28 },
+      { wch: 14 },
       { wch: 28 },
       { wch: 16 },
       { wch: 12 },
@@ -177,7 +218,22 @@ export default function DataGuruPage() {
 
   const handleEdit = (g: Guru) => {
     setEditingGuru(g);
-    setFormData(g);
+    setFormData({
+      nip: g.nip,
+      nuptk: g.nuptk ?? '',
+      nik: g.nik ?? '',
+      nama: g.nama,
+      tahunAjaran: g.tahunAjaran,
+      role: g.role,
+      tempatLahir: g.tempatLahir ?? '',
+      tanggalLahir: g.tanggalLahir ?? '',
+      jabatan: g.jabatan ?? '',
+      alamat: g.alamat ?? '',
+      sapaan: (g.sapaan ?? '') as '' | 'Ustad' | 'Ustadzah',
+      email: g.email ?? '',
+      telepon: g.telepon ?? '',
+      status: g.status,
+    });
     setShowModal(true);
   };
 
@@ -230,8 +286,15 @@ export default function DataGuruPage() {
       const payload = {
         ...formData,
         nip: formData.nip.trim(),
+        nuptk: formData.nuptk.trim(),
+        nik: formData.nik.trim(),
         nama: formData.nama.trim(),
         tahunAjaran: formData.tahunAjaran.trim(),
+        tempatLahir: formData.tempatLahir.trim(),
+        tanggalLahir: formData.tanggalLahir,
+        jabatan: formData.jabatan.trim(),
+        alamat: formData.alamat.trim(),
+        sapaan: formData.sapaan,
         email: formData.email.trim(),
         telepon: formData.telepon.trim(),
       };
@@ -285,33 +348,43 @@ export default function DataGuruPage() {
 
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="relative">
-          <Search
-            size={20}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          />
-          <input
-            type="text"
-            placeholder="Cari guru (nama, NIP, atau akses)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
-          />
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Cari Guru
+            </label>
+            <div className="relative">
+              <Search
+                size={20}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="text"
+                placeholder="Cari guru (nama, NIP, NUPTK, atau akses)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+              />
+            </div>
           </div>
-          <select
-            value={filterTahunAjaran}
-            onChange={(e) => setFilterTahunAjaran(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
-          >
-            <option value="" disabled>
-              Pilih Tahun Ajaran
-            </option>
-            {tahunAjaranList.map((tahunAjaran) => (
-              <option key={tahunAjaran.value} value={tahunAjaran.value}>
-                {tahunAjaran.label}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              Filter Tahun Ajaran
+            </label>
+            <select
+              value={filterTahunAjaran}
+              onChange={(e) => setFilterTahunAjaran(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] focus:border-transparent outline-none"
+            >
+              <option value="" disabled>
+                Pilih Tahun Ajaran
               </option>
-            ))}
-          </select>
+              {tahunAjaranList.map((tahunAjaran) => (
+                <option key={tahunAjaran.value} value={tahunAjaran.value}>
+                  {tahunAjaran.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -333,6 +406,9 @@ export default function DataGuruPage() {
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
                       NIP
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
+                      Profil Guru
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
                       Nama
@@ -360,6 +436,13 @@ export default function DataGuruPage() {
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">{g.nip}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">
+                        <div>NUPTK: {g.nuptk || '-'}</div>
+                        <div>NIK: {g.nik || '-'}</div>
+                        <div className="text-xs text-gray-500">
+                          {g.tempatLahir || '-'}{g.tanggalLahir ? `, ${g.tanggalLahir}` : ''}
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{g.nama}</td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex flex-wrap gap-2">
@@ -378,8 +461,10 @@ export default function DataGuruPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
+                        <div>{g.sapaan || '-'}{g.jabatan ? ` - ${g.jabatan}` : ''}</div>
                         <div>{g.email}</div>
                         <div className="text-xs text-gray-500">{g.telepon}</div>
+                        <div className="text-xs text-gray-500">{g.alamat || '-'}</div>
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span
@@ -394,6 +479,13 @@ export default function DataGuruPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setDetailGuru(g)}
+                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Lihat Detail"
+                          >
+                            <Eye size={18} />
+                          </button>
                           <button
                             onClick={() => handleEdit(g)}
                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -429,6 +521,51 @@ export default function DataGuruPage() {
       </div>
 
       <AnimatePresence>
+        {detailGuru && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setDetailGuru(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-2xl rounded-xl bg-white shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+                <h3 className="text-xl font-bold text-gray-900">Detail Guru</h3>
+                <button
+                  onClick={() => setDetailGuru(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="grid gap-4 p-6 md:grid-cols-2">
+                <DetailItem label="NIP" value={detailGuru.nip} />
+                <DetailItem label="NUPTK" value={detailGuru.nuptk} />
+                <DetailItem label="NIK" value={detailGuru.nik} />
+                <DetailItem label="Nama Lengkap" value={detailGuru.nama} />
+                <DetailItem label="Tahun Ajaran" value={detailGuru.tahunAjaran} />
+                <DetailItem label="Akses Guru" value={detailGuru.role.join(', ')} />
+                <DetailItem label="Ustad / Ustadzah" value={detailGuru.sapaan} />
+                <DetailItem label="Status" value={detailGuru.status} />
+                <DetailItem label="Tempat Lahir" value={detailGuru.tempatLahir} />
+                <DetailItem label="Tanggal Lahir" value={detailGuru.tanggalLahir} />
+                <DetailItem label="Jabatan" value={detailGuru.jabatan} />
+                <DetailItem label="Email" value={detailGuru.email} />
+                <DetailItem label="Telepon" value={detailGuru.telepon} />
+                <DetailItem label="Alamat" value={detailGuru.alamat} wide />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
         {showImportModal && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -514,7 +651,7 @@ export default function DataGuruPage() {
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-xl shadow-2xl max-w-2xl w-full"
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
             >
               <div className="border-b px-6 py-4 flex items-center justify-between">
                 <h3 className="text-xl font-bold text-gray-900">
@@ -525,7 +662,7 @@ export default function DataGuruPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -536,6 +673,37 @@ export default function DataGuruPage() {
                       required
                       value={formData.nip}
                       onChange={(e) => setFormData({ ...formData, nip: e.target.value })}
+                      placeholder="Masukkan NIP guru"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Nomor Induk Pegawai.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      NUPTK
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.nuptk}
+                      onChange={(e) => setFormData({ ...formData, nuptk: e.target.value.replace(/\D/g, '') })}
+                      placeholder="Masukkan NUPTK"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Nomor Unik Pendidik dan Tenaga Kependidikan.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      NIK
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.nik}
+                      onChange={(e) => setFormData({ ...formData, nik: e.target.value.replace(/\D/g, '') })}
+                      placeholder="Masukkan NIK"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
                     />
                   </div>
@@ -599,6 +767,22 @@ export default function DataGuruPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Ustad / Ustadzah
+                    </label>
+                    <select
+                      value={formData.sapaan}
+                      onChange={(e) =>
+                        setFormData({ ...formData, sapaan: e.target.value as '' | 'Ustad' | 'Ustadzah' })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+                    >
+                      <option value="">Pilih Sapaan</option>
+                      <option value="Ustad">Ustad</option>
+                      <option value="Ustadzah">Ustadzah</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       Status
                     </label>
                     <select
@@ -611,6 +795,39 @@ export default function DataGuruPage() {
                       <option value="Aktif">Aktif</option>
                       <option value="Cuti">Cuti</option>
                     </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tempat Lahir
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.tempatLahir}
+                      onChange={(e) => setFormData({ ...formData, tempatLahir: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Tanggal Lahir
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.tanggalLahir}
+                      onChange={(e) => setFormData({ ...formData, tanggalLahir: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Jabatan
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.jabatan}
+                      onChange={(e) => setFormData({ ...formData, jabatan: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -636,6 +853,18 @@ export default function DataGuruPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Alamat
+                  </label>
+                  <textarea
+                    value={formData.alamat}
+                    onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+                  />
                 </div>
 
                 <div className="flex gap-4 pt-4 border-t">
@@ -666,6 +895,25 @@ const upsertGuru = (items: Guru[], nextItem: Guru) =>
   items.some((item) => item.id === nextItem.id)
     ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
     : [...items, nextItem];
+
+function DetailItem({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string;
+  value?: string | null;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? 'md:col-span-2' : ''}>
+      <p className="text-sm font-medium text-gray-500">{label}</p>
+      <p className="mt-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900">
+        {value && value.trim() !== '' ? value : '-'}
+      </p>
+    </div>
+  );
+}
 
 const getApiErrorMessage = (error: unknown, fallback: string) => {
   if (! (error instanceof ApiError)) {

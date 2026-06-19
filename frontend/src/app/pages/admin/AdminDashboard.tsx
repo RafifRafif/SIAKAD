@@ -20,8 +20,6 @@ import {
   getDashboardSummary,
   type DashboardSummary,
 } from '../../lib/academicActivityStore';
-import type { KelasItem } from '../../lib/kelasStore';
-import type { MasterPelajaran } from '../../lib/pelajaranStore';
 
 interface MetricCardProps {
   icon: LucideIcon;
@@ -93,29 +91,21 @@ function MetricCard({ icon: Icon, label, value, caption, href, color }: MetricCa
 
 export default function AdminDashboard() {
   const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
-  const [totalKelas, setTotalKelas] = useState(0);
-  const [totalPelajaran, setTotalPelajaran] = useState(0);
 
   useEffect(() => {
-    void Promise.all([
-      getDashboardSummary(),
-      apiGet<KelasItem[]>('/api/school-classes'),
-      apiGet<MasterPelajaran[]>('/api/subjects'),
-    ])
-      .then(([summaryData, kelasItems, pelajaranItems]) => {
+    void getDashboardSummary()
+      .then((summaryData) => {
         setSummary(summaryData);
-        setTotalKelas(kelasItems.length);
-        setTotalPelajaran(pelajaranItems.length);
       })
       .catch(() => {
         setSummary(emptyDashboardSummary);
-        setTotalKelas(0);
-        setTotalPelajaran(0);
       });
   }, []);
 
   const totalSiswa = summary.admin.totalSiswa;
   const totalGuru = summary.admin.totalGuru;
+  const totalKelas = summary.admin.totalKelas ?? 0;
+  const totalPelajaran = summary.admin.totalPelajaran ?? 0;
   const totalAcademicData = totalSiswa + totalGuru + totalKelas + totalPelajaran;
   const donutItems = [
     { label: 'Data Siswa', value: totalSiswa, color: '#2563EB' },

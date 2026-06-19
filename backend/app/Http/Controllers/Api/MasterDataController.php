@@ -87,6 +87,13 @@ class MasterDataController extends Controller
     {
         $query = Student::query()->orderBy('id');
 
+        $this->applyAcademicYearScope(
+            $query,
+            'tahun_ajaran',
+            $request,
+            ! $request->user()?->hasRole(User::ROLE_ADMIN)
+        );
+
         if ($request->filled('kelas')) {
             $query->where('kelas', (string) $request->string('kelas'));
         }
@@ -210,6 +217,13 @@ class MasterDataController extends Controller
     {
         $query = SchoolClass::query()->orderBy('id');
 
+        $this->applyAcademicYearScope(
+            $query,
+            'tahun_ajaran',
+            $request,
+            ! $request->user()?->hasRole(User::ROLE_ADMIN)
+        );
+
         $this->applyVisibleClassScope($query, $request->user(), 'nama');
 
         return response()->json(
@@ -276,6 +290,13 @@ class MasterDataController extends Controller
     {
         $query = Subject::query()->orderBy('id');
 
+        $this->applyAcademicYearScope(
+            $query,
+            'tahun_ajaran',
+            $request,
+            ! $request->user()?->hasRole(User::ROLE_ADMIN)
+        );
+
         if (! $request->user()?->hasRole(User::ROLE_ADMIN)) {
             $teacherName = $this->teacherNameForUser($request->user());
 
@@ -341,6 +362,13 @@ class MasterDataController extends Controller
     public function learningAssignments(Request $request): JsonResponse
     {
         $query = LearningAssignment::query()->orderBy('id');
+
+        $this->applyAcademicYearScope(
+            $query,
+            'tahun_ajaran',
+            $request,
+            ! $request->user()?->hasRole(User::ROLE_ADMIN)
+        );
 
         if (! $request->user()?->hasRole(User::ROLE_ADMIN)) {
             $teacherName = $this->teacherNameForUser($request->user());
@@ -463,6 +491,33 @@ class MasterDataController extends Controller
             ->update(['status' => 'Arsip']);
     }
 
+    private function applyAcademicYearScope(
+        $query,
+        string $column,
+        Request $request,
+        bool $defaultToActive = false
+    ): void {
+        if ($request->filled('tahunAjaran') && $request->string('tahunAjaran') !== 'all') {
+            $query->where($column, (string) $request->string('tahunAjaran'));
+
+            return;
+        }
+
+        if (! $defaultToActive) {
+            return;
+        }
+
+        $activeAcademicYear = $this->activeAcademicYearValue();
+
+        if ($activeAcademicYear === null) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where($column, $activeAcademicYear);
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -550,10 +605,17 @@ class MasterDataController extends Controller
                 Rule::unique('teachers', 'nip')->ignore($teacher?->id),
                 $this->uniqueUserUsernameRule($userIdToIgnore),
             ],
+            'nuptk' => ['nullable', 'string', 'max:255', 'regex:/^[0-9]+$/'],
+            'nik' => ['nullable', 'string', 'max:255', 'regex:/^[0-9]+$/'],
             'nama' => ['required', 'string', 'max:255'],
             'tahunAjaran' => ['required', 'string', 'max:255'],
             'role' => ['required', 'array', 'min:1'],
             'role.*' => ['required', Rule::in(['Wali Kelas', 'Guru Mapel'])],
+            'tempatLahir' => ['nullable', 'string', 'max:255'],
+            'tanggalLahir' => ['nullable', 'date'],
+            'jabatan' => ['nullable', 'string', 'max:255'],
+            'alamat' => ['nullable', 'string'],
+            'sapaan' => ['nullable', Rule::in(['Ustad', 'Ustadzah', ''])],
             'email' => [
                 'nullable',
                 'email',
@@ -566,9 +628,16 @@ class MasterDataController extends Controller
 
         return [
             'nip' => trim($data['nip']),
+            'nuptk' => isset($data['nuptk']) ? trim($data['nuptk']) : null,
+            'nik' => isset($data['nik']) ? trim($data['nik']) : null,
             'nama' => trim($data['nama']),
             'tahun_ajaran' => trim($data['tahunAjaran']),
             'roles' => array_values($data['role']),
+            'tempat_lahir' => isset($data['tempatLahir']) ? trim($data['tempatLahir']) : null,
+            'tanggal_lahir' => $data['tanggalLahir'] ?? null,
+            'jabatan' => isset($data['jabatan']) ? trim($data['jabatan']) : null,
+            'alamat' => isset($data['alamat']) ? trim($data['alamat']) : null,
+            'sapaan' => isset($data['sapaan']) ? trim($data['sapaan']) : null,
             'email' => isset($data['email']) ? trim($data['email']) : null,
             'telepon' => isset($data['telepon']) ? trim($data['telepon']) : null,
             'status' => $data['status'],
@@ -769,20 +838,34 @@ class MasterDataController extends Controller
         $classNames = [];
 
         if ($user->hasRole(User::ROLE_WALI_KELAS)) {
+            $activeAcademicYear = $this->activeAcademicYearValue();
+
+            if ($activeAcademicYear === null) {
+                return [];
+            }
+
             $classNames = array_merge(
                 $classNames,
                 SchoolClass::query()
                     ->where('wali_kelas', $teacherName)
+                    ->where('tahun_ajaran', $activeAcademicYear)
                     ->pluck('nama')
                     ->all(),
             );
         }
 
         if ($user->hasRole(User::ROLE_GURU_MAPEL)) {
+            $activeAcademicYear = $this->activeAcademicYearValue();
+
+            if ($activeAcademicYear === null) {
+                return [];
+            }
+
             $classNames = array_merge(
                 $classNames,
                 LearningAssignment::query()
                     ->where('guru_pengampu', $teacherName)
+                    ->where('tahun_ajaran', $activeAcademicYear)
                     ->pluck('kelas')
                     ->all(),
             );
@@ -799,9 +882,15 @@ class MasterDataController extends Controller
 
         SchoolClass::query()
             ->where('nama', $className)
-            ->update([
-                'jumlah_siswa' => Student::query()->where('kelas', $className)->count(),
-            ]);
+            ->get()
+            ->each(function (SchoolClass $schoolClass): void {
+                $schoolClass->update([
+                    'jumlah_siswa' => Student::query()
+                        ->where('kelas', $schoolClass->nama)
+                        ->where('tahun_ajaran', $schoolClass->tahun_ajaran)
+                        ->count(),
+                ]);
+            });
     }
 
     private function syncAcademicRecordsForStudent(string $previousNis, Student $student): void
@@ -865,5 +954,19 @@ class MasterDataController extends Controller
         StudentGrade::query()->where('mapel', $previousName)->update(['mapel' => $newName]);
         AttendanceRecord::query()->where('mapel', $previousName)->update(['mapel' => $newName]);
         LearningTask::query()->where('mapel', $previousName)->update(['mapel' => $newName]);
+    }
+
+    private function activeAcademicYearValue(): ?string
+    {
+        $academicYear = AcademicYear::query()
+            ->where('status', 'Aktif')
+            ->latest('id')
+            ->first();
+
+        if ($academicYear === null) {
+            return null;
+        }
+
+        return trim($academicYear->nama.' '.$academicYear->semester);
     }
 }

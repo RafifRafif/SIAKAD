@@ -19,6 +19,7 @@ import { Button } from '../components/ui/button';
 
 interface ProfileResponse {
   studentId?: number | null;
+  teacherId?: number | null;
   username: string;
   role: AppRole;
   guruAccess?: GuruAccess[];
@@ -27,6 +28,7 @@ interface ProfileResponse {
   telepon?: string | null;
   alamat?: string | null;
   tanggalLahir?: string | null;
+  nuptk?: string | null;
   nisn?: string | null;
   nik?: string | null;
   tahunAjaran?: string | null;
@@ -36,6 +38,9 @@ interface ProfileResponse {
   namaOrangTua?: string | null;
   jenisKelamin?: string | null;
   tempatLahir?: string | null;
+  jabatan?: string | null;
+  sapaan?: string | null;
+  status?: 'Aktif' | 'Cuti' | null;
   fotoProfil?: string | null;
 }
 
@@ -47,6 +52,9 @@ export default function ProfilePage() {
   const [profileRole, setProfileRole] = useState<AppRole>('siswa');
   const [identifierLabel, setIdentifierLabel] = useState('Akun');
   const [identifierValue, setIdentifierValue] = useState('');
+  const [teacherId, setTeacherId] = useState<number | null>(null);
+  const [teacherAccessLabel, setTeacherAccessLabel] = useState('');
+  const [profileStatus, setProfileStatus] = useState<'Aktif' | 'Cuti'>('Aktif');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [studentId, setStudentId] = useState<number | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -59,6 +67,7 @@ export default function ProfilePage() {
     telepon: '',
     alamat: '',
     tanggalLahir: '',
+    nuptk: '',
     nisn: '',
     nik: '',
     tahunAjaran: '',
@@ -68,6 +77,9 @@ export default function ProfilePage() {
     namaOrangTua: '',
     jenisKelamin: '',
     tempatLahir: '',
+    jabatan: '',
+    sapaan: '',
+    status: 'Aktif' as 'Aktif' | 'Cuti',
   });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -97,6 +109,7 @@ export default function ProfilePage() {
       const profile = await apiPut<ProfileResponse>('/api/profile', {
         ...formData,
         studentId,
+        teacherId,
       });
       applyProfile(profile);
       showToast('Profile berhasil diupdate!', 'success');
@@ -202,8 +215,11 @@ export default function ProfilePage() {
   const applyProfile = (profile: ProfileResponse) => {
     setProfileRole(profile.role);
     setStudentId(profile.studentId ?? null);
+    setTeacherId(profile.teacherId ?? null);
     setProfileRoleLabel(profileRoleLabelFromProfile(profile));
-    setIdentifierLabel(profile.role === 'siswa' ? 'NIS' : 'Akun');
+    setTeacherAccessLabel(profile.guruAccess?.join(', ') ?? '');
+    setProfileStatus(profile.status === 'Cuti' ? 'Cuti' : 'Aktif');
+    setIdentifierLabel(profile.role === 'siswa' ? 'NIS' : 'NIP');
     setIdentifierValue(profile.username);
     void loadProfilePhoto(profile.fotoProfil ?? null);
     setFormData({
@@ -212,6 +228,7 @@ export default function ProfilePage() {
       telepon: profile.telepon ?? '',
       alamat: profile.alamat ?? '',
       tanggalLahir: profile.tanggalLahir ?? '',
+      nuptk: profile.nuptk ?? '',
       nisn: profile.nisn ?? '',
       nik: profile.nik ?? '',
       tahunAjaran: profile.tahunAjaran ?? '',
@@ -221,10 +238,14 @@ export default function ProfilePage() {
       namaOrangTua: profile.namaOrangTua ?? '',
       jenisKelamin: profile.jenisKelamin ?? '',
       tempatLahir: profile.tempatLahir ?? '',
+      jabatan: profile.jabatan ?? '',
+      sapaan: profile.sapaan ?? '',
+      status: profile.status === 'Cuti' ? 'Cuti' : 'Aktif',
     });
   };
 
   const isStudentProfile = profileRole === 'siswa';
+  const isTeacherProfile = profileRole === 'guru';
 
   const loadProfilePhoto = async (photoUrl: string | null) => {
     const requestId = photoLoadRequestRef.current + 1;
@@ -329,8 +350,14 @@ export default function ProfilePage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Status:</span>
-                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium text-xs">
-                  Aktif
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    profileStatus === 'Aktif'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-yellow-100 text-yellow-700'
+                  }`}
+                >
+                  {profileStatus}
                 </span>
               </div>
             </div>
@@ -382,6 +409,40 @@ export default function ProfilePage() {
                         type="text"
                         value={formData.nik}
                         onChange={(e) => setFormData({ ...formData, nik: e.target.value.replace(/\D/g, '') })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {isTeacherProfile && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NUPTK
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nuptk}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nuptk: e.target.value.replace(/\D/g, '') })
+                        }
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NIK
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.nik}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nik: e.target.value.replace(/\D/g, '') })
+                        }
                         disabled={!isEditing}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
                       />
@@ -442,6 +503,88 @@ export default function ProfilePage() {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
                   />
                 </div>
+
+                {isTeacherProfile && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tempat Lahir
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tempatLahir}
+                        onChange={(e) => setFormData({ ...formData, tempatLahir: e.target.value })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Jabatan
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.jabatan}
+                        onChange={(e) => setFormData({ ...formData, jabatan: e.target.value })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Ustad / Ustadzah
+                      </label>
+                      <select
+                        value={formData.sapaan}
+                        onChange={(e) => setFormData({ ...formData, sapaan: e.target.value })}
+                        disabled={!isEditing}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                      >
+                        <option value="">Pilih Sapaan</option>
+                        <option value="Ustad">Ustad</option>
+                        <option value="Ustadzah">Ustadzah</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tahun Ajaran
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tahunAjaran}
+                        disabled
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-gray-50 text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Akses Guru
+                      </label>
+                      <input
+                        type="text"
+                        value={teacherAccessLabel}
+                        disabled
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-gray-50 text-gray-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Status
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.status}
+                        disabled
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none bg-gray-50 text-gray-600"
+                      />
+                    </div>
+                  </>
+                )}
 
                 {isStudentProfile && (
                   <>

@@ -46,6 +46,7 @@ class FrontendFeatureController extends Controller
 
         $data = $request->validate([
             'studentId' => ['nullable', 'integer'],
+            'teacherId' => ['nullable', 'integer'],
             'nama' => ['required', 'string', 'max:255'],
             'email' => [
                 'nullable',
@@ -56,6 +57,7 @@ class FrontendFeatureController extends Controller
             'telepon' => ['nullable', 'string', 'max:255'],
             'alamat' => ['nullable', 'string'],
             'tanggalLahir' => ['nullable', 'date'],
+            'nuptk' => ['nullable', 'string', 'max:255', 'regex:/^[0-9]+$/'],
             'nisn' => ['nullable', 'string', 'max:255', 'regex:/^[0-9]+$/'],
             'nik' => ['nullable', 'string', 'max:255', 'regex:/^[0-9]+$/'],
             'tahunAjaran' => ['nullable', 'string', 'max:255'],
@@ -65,6 +67,9 @@ class FrontendFeatureController extends Controller
             'namaOrangTua' => ['nullable', 'string', 'max:255'],
             'jenisKelamin' => ['nullable', 'string', 'max:255'],
             'tempatLahir' => ['nullable', 'string', 'max:255'],
+            'jabatan' => ['nullable', 'string', 'max:255'],
+            'sapaan' => ['nullable', Rule::in(['Ustad', 'Ustadzah', ''])],
+            'status' => ['nullable', Rule::in(['Aktif', 'Cuti'])],
         ]);
 
         DB::transaction(function () use ($user, $data): void {
@@ -262,9 +267,18 @@ class FrontendFeatureController extends Controller
             $teacher = Teacher::query()->updateOrCreate(
                 ['nip' => $nip],
                 [
+                    'nuptk' => $row['nuptk'] ?: null,
+                    'nik' => $row['nik'] ?: null,
                     'nama' => $nama,
                     'tahun_ajaran' => $tahunAjaran,
                     'roles' => $roles,
+                    'tempat_lahir' => $row['tempatLahir'] ?: null,
+                    'tanggal_lahir' => $row['tanggalLahir'] ?: null,
+                    'jabatan' => $row['jabatan'] ?: null,
+                    'alamat' => $row['alamat'] ?: null,
+                    'sapaan' => in_array($row['sapaan'] ?? '', ['Ustad', 'Ustadzah'], true)
+                        ? $row['sapaan']
+                        : null,
                     'email' => $row['email'] ?: null,
                     'telepon' => $row['telepon'] ?: null,
                     'status' => in_array($row['status'] ?? '', ['Aktif', 'Cuti'], true)
@@ -287,17 +301,29 @@ class FrontendFeatureController extends Controller
 
     public function reportOptions(): JsonResponse
     {
+        $tahunAjaran = $this->resolvedAcademicYear(request());
         $months = AttendanceRecord::query()
+            ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
             ->whereNotNull('tanggal')
             ->pluck('tanggal')
-            ->merge(StudentGrade::query()->whereNotNull('tanggal')->pluck('tanggal'))
+            ->merge(
+                StudentGrade::query()
+                    ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
+                    ->whereNotNull('tanggal')
+                    ->pluck('tanggal')
+            )
             ->map(fn ($date) => Carbon::parse($date)->locale('id')->translatedFormat('F Y'))
             ->unique()
             ->values();
 
         $classes = SchoolClass::query()
+            ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
             ->pluck('nama')
-            ->merge(Student::query()->pluck('kelas'))
+            ->merge(
+                Student::query()
+                    ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
+                    ->pluck('kelas')
+            )
             ->filter()
             ->unique()
             ->values();
@@ -313,6 +339,16 @@ class FrontendFeatureController extends Controller
         $filters = $this->reportFilters($request);
         $attendanceQuery = AttendanceRecord::query();
         $gradeQuery = StudentGrade::query();
+        $tahunAjaran = $this->resolvedAcademicYear($request);
+
+        if ($tahunAjaran !== null) {
+            $attendanceQuery->where('tahun_ajaran', $tahunAjaran);
+            $gradeQuery->where('tahun_ajaran', $tahunAjaran);
+        } else {
+            $attendanceQuery->whereRaw('1 = 0');
+            $gradeQuery->whereRaw('1 = 0');
+        }
+
         $this->applyReportFilters($attendanceQuery, $filters);
         $this->applyReportFilters($gradeQuery, $filters);
 
@@ -323,10 +359,11 @@ class FrontendFeatureController extends Controller
         $lines = [
             'Laporan Akademik SIAKAD',
             'Periode: '.$filters['periode'],
+            'Tahun Ajaran: '.($tahunAjaran ?: 'Tidak ada tahun ajaran aktif'),
             'Bulan: '.($filters['bulan'] ?: 'Semua bulan'),
             'Kelas: '.($filters['kelas'] ?: 'Semua kelas'),
-            'Total siswa: '.Student::query()->count(),
-            'Total guru: '.Teacher::query()->count(),
+            'Total siswa: '.Student::query()->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))->count(),
+            'Total guru: '.Teacher::query()->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))->count(),
             'Total presensi: '.$attendanceTotal,
             'Rata-rata kehadiran: '.($attendanceTotal > 0 ? round(($attendancePresent / $attendanceTotal) * 100, 1).'%' : '0%'),
             'Rata-rata nilai: '.($averageGrade !== null ? round((float) $averageGrade, 2) : '0'),
@@ -339,7 +376,7 @@ class FrontendFeatureController extends Controller
     {
         $nis = $this->targetNis($request);
         $student = Student::query()->where('nis', $nis)->first();
-        $tahunAjaran = (string) $request->string('tahunAjaran', $student?->tahun_ajaran ?? '');
+        $tahunAjaran = (string) $request->string('tahunAjaran', $this->resolvedAcademicYear($request) ?? $student?->tahun_ajaran ?? '');
         $semester = $this->semesterFromTahunAjaran($tahunAjaran);
         $kelas = $student?->kelas ?? '-';
         $grades = StudentGrade::query()
@@ -401,13 +438,20 @@ class FrontendFeatureController extends Controller
     public function studentInsights(Request $request): JsonResponse
     {
         $nis = $this->targetNis($request);
-        $rank = $this->rankForStudent($nis);
+        $academicYear = $this->resolvedAcademicYearModel($request);
+        $dateRange = $this->academicYearDateRange($academicYear);
+        $rank = $this->rankForStudent($nis, $academicYear);
 
         return response()->json([
             'rank' => $rank['rank'],
             'classSize' => $rank['classSize'],
             'notes' => StudentNote::query()
                 ->where('nis', $nis)
+                ->when(
+                    $dateRange !== null,
+                    fn ($query) => $query->whereBetween('tanggal', [$dateRange['start'], $dateRange['end']]),
+                    fn ($query) => $query->whereRaw('1 = 0')
+                )
                 ->orderByDesc('tanggal')
                 ->orderByDesc('id')
                 ->get()
@@ -415,6 +459,11 @@ class FrontendFeatureController extends Controller
                 ->values(),
             'achievements' => StudentAchievement::query()
                 ->where('nis', $nis)
+                ->when(
+                    $dateRange !== null,
+                    fn ($query) => $query->whereBetween('tanggal', [$dateRange['start'], $dateRange['end']]),
+                    fn ($query) => $query->whereRaw('1 = 0')
+                )
                 ->orderByDesc('tanggal')
                 ->orderByDesc('id')
                 ->get()
@@ -429,9 +478,24 @@ class FrontendFeatureController extends Controller
         $today = now()->toDateString();
         $startOfWeek = now()->startOfWeek()->toDateString();
         $endOfWeek = now()->endOfWeek()->toDateString();
+        $academicYear = $this->resolvedAcademicYearModel($request);
+        $dateRange = $this->academicYearDateRange($academicYear);
+        $tahunAjaran = $this->resolvedAcademicYear($request);
 
         $agendaQuery = ClassAgenda::query();
         $reminderQuery = ClassReminder::query();
+
+        if ($dateRange !== null) {
+            $agendaQuery->whereBetween('tanggal', [$dateRange['start'], $dateRange['end']]);
+            $reminderQuery->where(function ($query) use ($dateRange): void {
+                $query
+                    ->whereNull('tanggal')
+                    ->orWhereBetween('tanggal', [$dateRange['start'], $dateRange['end']]);
+            });
+        } else {
+            $agendaQuery->whereRaw('1 = 0');
+            $reminderQuery->whereRaw('1 = 0');
+        }
 
         if ($className !== null) {
             $agendaQuery->where(fn ($query) => $query->whereNull('kelas')->orWhere('kelas', $className));
@@ -457,6 +521,7 @@ class FrontendFeatureController extends Controller
             ->count();
         $attendanceFollowUps = AttendanceRecord::query()
             ->when($className, fn ($query) => $query->where('kelas', $className))
+            ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
             ->whereIn('status', ['alpha', 'Alpha', 'Tidak Hadir'])
             ->whereDate('tanggal', '>=', now()->subDays(7)->toDateString())
             ->count();
@@ -465,9 +530,11 @@ class FrontendFeatureController extends Controller
             'kelas' => $className,
             'totalStudents' => Student::query()
                 ->when($className, fn ($query) => $query->where('kelas', $className))
+                ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
                 ->count(),
             'attendanceToday' => AttendanceRecord::query()
                 ->when($className, fn ($query) => $query->where('kelas', $className))
+                ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
                 ->whereDate('tanggal', $today)
                 ->count(),
             'agendaToday' => $agendaToday,
@@ -491,6 +558,13 @@ class FrontendFeatureController extends Controller
     public function todaySchedule(Request $request): JsonResponse
     {
         $query = LearningAssignment::query()->orderBy('id');
+        $tahunAjaran = $this->resolvedAcademicYear($request);
+
+        if ($tahunAjaran !== null) {
+            $query->where('tahun_ajaran', $tahunAjaran);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
 
         if ($request->user()?->hasRole(User::ROLE_SISWA)) {
             $student = Student::query()->where('nis', $request->user()->username)->first();
@@ -515,33 +589,35 @@ class FrontendFeatureController extends Controller
     private function profilePayload(User $user, Request $request): array
     {
         $profile = UserProfile::query()->where('user_id', $user->id)->first();
-        $studentId = isset($data['studentId']) ? (int) $data['studentId'] : null;
-        $student = Student::query()
-            ->when($studentId !== null, fn ($query) => $query->whereKey($studentId))
-            ->where('nis', $user->username)
-            ->first();
+        $student = Student::query()->where('nis', $user->username)->first();
         $teacher = Teacher::query()->where('nip', $user->username)->first();
 
         return [
             'studentId' => $student?->id,
+            'teacherId' => $teacher?->id,
             'username' => $user->username,
             'role' => $user->frontendRole(),
             'guruAccess' => $user->guruAccess(),
             'nama' => $student?->nama ?? $teacher?->nama ?? $user->name,
             'email' => $student?->email ?? $teacher?->email ?? $user->email,
             'telepon' => $student?->telepon ?? $teacher?->telepon ?? $profile?->telepon,
-            'alamat' => $student?->alamat ?? $profile?->alamat,
+            'alamat' => $student?->alamat ?? $teacher?->alamat ?? $profile?->alamat,
             'tanggalLahir' => $this->safeDateForFrontend($student?->tanggal_lahir)
+                ?? $this->safeDateForFrontend($teacher?->tanggal_lahir)
                 ?? $this->safeDateForFrontend($profile?->tanggal_lahir),
+            'nuptk' => $teacher?->nuptk,
             'nisn' => $student?->nisn,
-            'nik' => $student?->nik,
-            'tahunAjaran' => $student?->tahun_ajaran,
+            'nik' => $student?->nik ?? $teacher?->nik,
+            'tahunAjaran' => $student?->tahun_ajaran ?? $teacher?->tahun_ajaran,
             'kelas' => $student?->kelas,
             'waliKelas' => $student?->wali_kelas,
             'asalSekolah' => $student?->asal_sekolah,
             'namaOrangTua' => $student?->nama_orang_tua,
             'jenisKelamin' => $student?->jenis_kelamin,
-            'tempatLahir' => $student?->tempat_lahir,
+            'tempatLahir' => $student?->tempat_lahir ?? $teacher?->tempat_lahir,
+            'jabatan' => $teacher?->jabatan,
+            'sapaan' => $teacher?->sapaan,
+            'status' => $teacher?->status ?? 'Aktif',
             'fotoProfil' => $this->profilePhotoUrl($profile, $request),
         ];
     }
@@ -608,7 +684,11 @@ class FrontendFeatureController extends Controller
      */
     private function syncLinkedProfileData(User $user, array $data): void
     {
-        $student = Student::query()->where('nis', $user->username)->first();
+        $studentId = isset($data['studentId']) ? (int) $data['studentId'] : null;
+        $student = Student::query()
+            ->when($studentId !== null, fn ($query) => $query->whereKey($studentId))
+            ->where('nis', $user->username)
+            ->first();
 
         if ($student !== null) {
             $student->update([
@@ -635,7 +715,11 @@ class FrontendFeatureController extends Controller
             return;
         }
 
-        $teacher = Teacher::query()->where('nip', $user->username)->first();
+        $teacherId = isset($data['teacherId']) ? (int) $data['teacherId'] : null;
+        $teacher = Teacher::query()
+            ->when($teacherId !== null, fn ($query) => $query->whereKey($teacherId))
+            ->where('nip', $user->username)
+            ->first();
 
         if ($teacher !== null) {
             $previousName = $teacher->nama;
@@ -643,6 +727,21 @@ class FrontendFeatureController extends Controller
                 'nama' => trim($data['nama']),
                 'email' => $data['email'] ? trim($data['email']) : null,
                 'telepon' => isset($data['telepon']) ? trim($data['telepon']) : null,
+                'alamat' => isset($data['alamat']) ? trim($data['alamat']) : null,
+                'tanggal_lahir' => $data['tanggalLahir'] ?? null,
+                'nuptk' => isset($data['nuptk']) ? trim($data['nuptk']) : null,
+                'nik' => isset($data['nik']) ? trim($data['nik']) : null,
+                'tahun_ajaran' => isset($data['tahunAjaran']) && trim((string) $data['tahunAjaran']) !== ''
+                    ? trim($data['tahunAjaran'])
+                    : $teacher->tahun_ajaran,
+                'tempat_lahir' => isset($data['tempatLahir']) ? trim($data['tempatLahir']) : null,
+                'jabatan' => isset($data['jabatan']) ? trim($data['jabatan']) : null,
+                'sapaan' => isset($data['sapaan']) && trim((string) $data['sapaan']) !== ''
+                    ? trim($data['sapaan'])
+                    : null,
+                'status' => isset($data['status']) && trim((string) $data['status']) !== ''
+                    ? trim($data['status'])
+                    : $teacher->status,
             ]);
 
             SchoolClass::query()->where('wali_kelas', $previousName)->update(['wali_kelas' => trim($data['nama'])]);
@@ -682,6 +781,7 @@ class FrontendFeatureController extends Controller
                 'nisn' => '',
                 'nik' => '',
                 'nip' => '',
+                'nuptk' => '',
                 'nama' => '',
                 'tahunAjaran' => '',
                 'kelas' => '',
@@ -691,6 +791,8 @@ class FrontendFeatureController extends Controller
                 'jenisKelamin' => '',
                 'tempatLahir' => '',
                 'tanggalLahir' => '',
+                'jabatan' => '',
+                'sapaan' => '',
                 'alamat' => '',
                 'role' => '',
                 'email' => '',
@@ -999,6 +1101,7 @@ class FrontendFeatureController extends Controller
             'nisn' => 'nisn',
             'nik' => 'nik',
             'nip', 'nomorindukpegawai', 'nomorindukguru' => 'nip',
+            'nuptk' => 'nuptk',
             'nama', 'namalengkap', 'namasiswa' => 'nama',
             'tahunajaran', 'tahun' => 'tahunAjaran',
             'kelas', 'class' => 'kelas',
@@ -1008,6 +1111,8 @@ class FrontendFeatureController extends Controller
             'jeniskelamin', 'jk', 'gender' => 'jenisKelamin',
             'tempatlahir', 'tempat' => 'tempatLahir',
             'tanggallahir', 'tgllahir', 'ttl' => 'tanggalLahir',
+            'jabatan', 'position' => 'jabatan',
+            'sapaan', 'ustadustadzah', 'ustadzustadzah', 'ustadustadzahguru' => 'sapaan',
             'alamat', 'address' => 'alamat',
             'role', 'roles', 'akses', 'aksesguru' => 'role',
             'email', 'emailaddress', 'surel' => 'email',
@@ -1121,9 +1226,15 @@ class FrontendFeatureController extends Controller
     {
         SchoolClass::query()
             ->where('nama', $className)
-            ->update([
-                'jumlah_siswa' => Student::query()->where('kelas', $className)->count(),
-            ]);
+            ->get()
+            ->each(function (SchoolClass $schoolClass): void {
+                $schoolClass->update([
+                    'jumlah_siswa' => Student::query()
+                        ->where('kelas', $schoolClass->nama)
+                        ->where('tahun_ajaran', $schoolClass->tahun_ajaran)
+                        ->count(),
+                ]);
+            });
     }
 
     private function targetNis(Request $request): string
@@ -1138,7 +1249,7 @@ class FrontendFeatureController extends Controller
     /**
      * @return array{rank: int|null, classSize: int}
      */
-    private function rankForStudent(string $nis): array
+    private function rankForStudent(string $nis, ?AcademicYear $academicYear = null): array
     {
         $student = Student::query()->where('nis', $nis)->first();
 
@@ -1146,8 +1257,13 @@ class FrontendFeatureController extends Controller
             return ['rank' => null, 'classSize' => 0];
         }
 
+        $tahunAjaran = $academicYear !== null
+            ? trim($academicYear->nama.' '.$academicYear->semester)
+            : $this->activeAcademicYearValue();
+
         $averages = StudentGrade::query()
             ->where('kelas', $student->kelas)
+            ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
             ->selectRaw('nis, avg(nilai) as average_score')
             ->groupBy('nis')
             ->orderByDesc('average_score')
@@ -1164,7 +1280,10 @@ class FrontendFeatureController extends Controller
 
         return [
             'rank' => $rank,
-            'classSize' => Student::query()->where('kelas', $student->kelas)->count(),
+            'classSize' => Student::query()
+                ->where('kelas', $student->kelas)
+                ->when($tahunAjaran !== null, fn ($query) => $query->where('tahun_ajaran', $tahunAjaran), fn ($query) => $query->whereRaw('1 = 0'))
+                ->count(),
         ];
     }
 
@@ -1180,12 +1299,86 @@ class FrontendFeatureController extends Controller
             return null;
         }
 
-        return SchoolClass::query()->where('wali_kelas', $teacher->nama)->value('nama');
+        return SchoolClass::query()
+            ->where('wali_kelas', $teacher->nama)
+            ->when(
+                $this->activeAcademicYearValue(),
+                fn ($query, $tahunAjaran) => $query->where('tahun_ajaran', $tahunAjaran),
+                fn ($query) => $query->whereRaw('1 = 0')
+            )
+            ->value('nama');
+    }
+
+    private function resolvedAcademicYear(Request $request): ?string
+    {
+        if ($request->filled('tahunAjaran') && $request->string('tahunAjaran') !== 'all') {
+            return (string) $request->string('tahunAjaran');
+        }
+
+        return $this->activeAcademicYearValue();
+    }
+
+    private function resolvedAcademicYearModel(Request $request): ?AcademicYear
+    {
+        if ($request->filled('tahunAjaran') && $request->string('tahunAjaran') !== 'all') {
+            $requestedValue = trim((string) $request->string('tahunAjaran'));
+
+            return AcademicYear::query()
+                ->get()
+                ->first(fn (AcademicYear $item) => trim($item->nama.' '.$item->semester) === $requestedValue);
+        }
+
+        return $this->activeAcademicYear();
+    }
+
+    private function activeAcademicYear(): ?AcademicYear
+    {
+        return AcademicYear::query()
+            ->where('status', 'Aktif')
+            ->latest('id')
+            ->first();
+    }
+
+    private function activeAcademicYearValue(): ?string
+    {
+        $academicYear = $this->activeAcademicYear();
+
+        if ($academicYear === null) {
+            return null;
+        }
+
+        return trim($academicYear->nama.' '.$academicYear->semester);
+    }
+
+    /**
+     * @return array{start: string, end: string}|null
+     */
+    private function academicYearDateRange(?AcademicYear $academicYear): ?array
+    {
+        if (
+            $academicYear === null ||
+            $academicYear->tanggal_mulai === null ||
+            $academicYear->tanggal_selesai === null
+        ) {
+            return null;
+        }
+
+        return [
+            'start' => $academicYear->tanggal_mulai->format('Y-m-d'),
+            'end' => $academicYear->tanggal_selesai->format('Y-m-d'),
+        ];
     }
 
     private function filteredLearningTasks(Request $request)
     {
         $query = LearningTask::query()->orderByDesc('tanggal')->orderByDesc('id');
+        $dateRange = $this->academicYearDateRange($this->resolvedAcademicYearModel($request));
+
+        if ($dateRange !== null) {
+            $query->whereBetween('tanggal', [$dateRange['start'], $dateRange['end']]);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
 
         if ($request->user()?->hasRole(User::ROLE_SISWA)) {
             $student = Student::query()->where('nis', $request->user()->username)->first();
@@ -1207,6 +1400,13 @@ class FrontendFeatureController extends Controller
     private function derivedTasksFromAssignments(Request $request)
     {
         $query = LearningAssignment::query()->orderBy('id');
+        $tahunAjaran = $this->resolvedAcademicYear($request);
+
+        if ($tahunAjaran !== null) {
+            $query->where('tahun_ajaran', $tahunAjaran);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
 
         if ($request->user()?->hasRole(User::ROLE_SISWA)) {
             $student = Student::query()->where('nis', $request->user()->username)->first();

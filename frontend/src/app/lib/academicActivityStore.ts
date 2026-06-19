@@ -60,6 +60,9 @@ export interface DashboardSummary {
   admin: {
     totalSiswa: number;
     totalGuru: number;
+    totalKelas?: number;
+    totalPelajaran?: number;
+    totalPembelajaran?: number;
     presensiHariIni: number | null;
     rataRataNilai: number | null;
   };
@@ -80,6 +83,9 @@ export const emptyDashboardSummary: DashboardSummary = {
   admin: {
     totalSiswa: 0,
     totalGuru: 0,
+    totalKelas: 0,
+    totalPelajaran: 0,
+    totalPembelajaran: 0,
     presensiHariIni: null,
     rataRataNilai: null,
   },
