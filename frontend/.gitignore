@@ -3,6 +3,7 @@
 
 # next.js build
 /.next
+/.next-dev
 /out
 
 # production
