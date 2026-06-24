@@ -408,9 +408,6 @@ export default function DataGuruPage() {
                       NIP
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
-                      Profil Guru
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
                       Nama
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">
@@ -436,13 +433,6 @@ export default function DataGuruPage() {
                       className="hover:bg-gray-50 transition-colors"
                     >
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">{g.nip}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        <div>NUPTK: {g.nuptk || '-'}</div>
-                        <div>NIK: {g.nik || '-'}</div>
-                        <div className="text-xs text-gray-500">
-                          {g.tempatLahir || '-'}{g.tanggalLahir ? `, ${g.tanggalLahir}` : ''}
-                        </div>
-                      </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{g.nama}</td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex flex-wrap gap-2">
@@ -461,10 +451,8 @@ export default function DataGuruPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">
-                        <div>{g.sapaan || '-'}{g.jabatan ? ` - ${g.jabatan}` : ''}</div>
-                        <div>{g.email}</div>
-                        <div className="text-xs text-gray-500">{g.telepon}</div>
-                        <div className="text-xs text-gray-500">{g.alamat || '-'}</div>
+                        <div>{g.email || '-'}</div>
+                        <div className="text-xs text-gray-500">{g.telepon || '-'}</div>
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span
@@ -534,7 +522,7 @@ export default function DataGuruPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl rounded-xl bg-white shadow-2xl"
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
             >
               <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
                 <h3 className="text-xl font-bold text-gray-900">Detail Guru</h3>
@@ -546,7 +534,7 @@ export default function DataGuruPage() {
                 </button>
               </div>
 
-              <div className="grid gap-4 p-6 md:grid-cols-2">
+              <div className="grid flex-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
                 <DetailItem label="NIP" value={detailGuru.nip} />
                 <DetailItem label="NUPTK" value={detailGuru.nuptk} />
                 <DetailItem label="NIK" value={detailGuru.nik} />

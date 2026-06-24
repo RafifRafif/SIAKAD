@@ -606,7 +606,7 @@ export default function DataSiswaPage() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-2xl rounded-xl bg-white shadow-2xl"
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
             >
               <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
                 <h3 className="text-xl font-bold text-gray-900">Detail Siswa</h3>
@@ -618,7 +618,7 @@ export default function DataSiswaPage() {
                 </button>
               </div>
 
-              <div className="grid gap-4 p-6 md:grid-cols-2">
+              <div className="grid flex-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
                 <DetailItem label="NIS" value={detailStudent.nis} />
                 <DetailItem label="NISN" value={detailStudent.nisn} />
                 <DetailItem label="NIK" value={detailStudent.nik} />

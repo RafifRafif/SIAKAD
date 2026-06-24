@@ -118,7 +118,7 @@ const roleNames = {
 };
 
 const adminPageDescriptions: Record<string, string> = {
-  '/admin': 'Ringkasan aktivitas sekolah hari ini',
+  '/admin': '',
   '/admin/tahun-ajaran': 'Kelola periode akademik aktif, draft, dan arsip',
   '/admin/guru': 'Kelola data guru dan akses fitur yang diberikan',
   '/admin/kelas': 'Kelola daftar kelas, wali kelas, dan kapasitas siswa',
@@ -433,27 +433,45 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
         <header
           className={
             isAdminLayout
-              ? 'relative z-30 bg-transparent px-4 pt-8 pb-4 sm:px-6 lg:px-8'
+              ? 'sticky top-0 z-30 border-b border-blue-100 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8'
               : 'sticky top-0 z-30 border-b border-gray-200 bg-white px-4 py-4 sm:px-6 lg:px-8'
           }
         >
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="text-gray-600 lg:hidden"
-            >
-              <Menu size={24} />
-            </button>
-            <div className={showAdminPageHeader ? 'block' : isAdminLayout ? 'hidden' : 'hidden lg:block'}>
-              <h1 className={isAdminLayout ? 'text-2xl font-bold text-[#08173f]' : 'text-xl font-semibold text-gray-900'}>
-                {getCurrentPageTitle()}
-              </h1>
-              {showAdminPageHeader && (
-                <p className="mt-1 text-sm font-medium text-[#526083]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className={`text-gray-600 ${isAdminLayout ? 'rounded-lg border border-blue-100 bg-white p-2 shadow-sm lg:hidden' : 'lg:hidden'}`}
+              >
+                <Menu size={24} />
+              </button>
+              <div
+                className={
+                  isAdminLayout
+                    ? 'hidden'
+                    : 'hidden lg:block'
+                }
+              >
+                <h1 className={isAdminLayout ? 'truncate text-2xl font-bold text-[#08173f]' : 'text-xl font-semibold text-gray-900'}>
+                  {getCurrentPageTitle()}
+                </h1>
+                {showAdminPageHeader && (
+                  <p className="mt-1 truncate text-sm font-medium text-[#526083]">
+                    {adminPageDescription}
+                  </p>
+                )}
+              </div>
+            </div>
+            {showAdminPageHeader && isAdminLayout && (
+              <div className="hidden min-w-0 flex-1 lg:block">
+                <h1 className="truncate text-2xl font-bold text-[#08173f]">
+                  {getCurrentPageTitle()}
+                </h1>
+                <p className="mt-1 truncate text-sm font-medium text-[#526083]">
                   {adminPageDescription}
                 </p>
-              )}
-            </div>
+              </div>
+            )}
             <div className="relative ml-auto">
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
