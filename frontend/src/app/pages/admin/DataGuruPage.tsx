@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, Upload, Download, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import * as XLSX from 'xlsx';
 import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { PaginationControls } from '../../components/dashboard/PaginationControls';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
+import { downloadExcelTemplate } from '../../lib/gradeImport';
 import { defaultGuruData, type GuruItem as Guru } from '../../lib/guruStore';
 import {
   defaultTahunAjaranData,
@@ -163,30 +163,29 @@ export default function DataGuruPage() {
         status: 'Aktif',
       },
     ];
-    const worksheet = XLSX.utils.json_to_sheet(rows, {
-      header: ['nip', 'nuptk', 'nik', 'nama', 'tahunAjaran', 'role', 'tempatLahir', 'tanggalLahir', 'jabatan', 'alamat', 'sapaan', 'email', 'telepon', 'status'],
+    downloadExcelTemplate({
+      filename: 'TEMPLATE GURU.xlsx',
+      title: 'TEMPLATE IMPORT DATA GURU',
+      description: 'Gunakan template ini untuk mengimport data guru. Guru dapat memiliki lebih dari satu akses dengan pemisah koma.',
+      sheetName: 'Template Guru',
+      columns: [
+        { key: 'nip', label: 'NIP', width: 14 },
+        { key: 'nuptk', label: 'NUPTK', width: 18 },
+        { key: 'nik', label: 'NIK', width: 20 },
+        { key: 'nama', label: 'Nama Lengkap', width: 24 },
+        { key: 'tahunAjaran', label: 'Tahun Ajaran', width: 20 },
+        { key: 'role', label: 'Akses Guru', width: 26 },
+        { key: 'tempatLahir', label: 'Tempat Lahir', width: 18 },
+        { key: 'tanggalLahir', label: 'Tanggal Lahir', width: 16 },
+        { key: 'jabatan', label: 'Jabatan', width: 22 },
+        { key: 'alamat', label: 'Alamat', width: 32 },
+        { key: 'sapaan', label: 'Ustad / Ustadzah', width: 18 },
+        { key: 'email', label: 'Email', width: 28 },
+        { key: 'telepon', label: 'Telepon', width: 18 },
+        { key: 'status', label: 'Status', width: 14 },
+      ],
+      rows,
     });
-    const workbook = XLSX.utils.book_new();
-
-    worksheet['!cols'] = [
-      { wch: 14 },
-      { wch: 18 },
-      { wch: 20 },
-      { wch: 24 },
-      { wch: 18 },
-      { wch: 24 },
-      { wch: 18 },
-      { wch: 14 },
-      { wch: 20 },
-      { wch: 28 },
-      { wch: 14 },
-      { wch: 28 },
-      { wch: 16 },
-      { wch: 12 },
-    ];
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Guru');
-    XLSX.writeFile(workbook, 'template-import-guru.xlsx');
   };
 
   const handleImportSubmit = async () => {

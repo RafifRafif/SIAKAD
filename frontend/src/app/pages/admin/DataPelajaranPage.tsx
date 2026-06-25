@@ -370,7 +370,7 @@ export default function DataPelajaranPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700">Nama Pelajaran</label>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">Nama Mata Pelajaran</label>
                     <div className="relative">
                       <BookOpen size={18} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
                       <select
@@ -390,7 +390,7 @@ export default function DataPelajaranPage() {
                     </div>
                     {masterPelajaran.length === 0 && (
                       <p className="mt-2 text-sm text-red-500">
-                        Tambahkan data di menu Data Pelajaran terlebih dahulu.
+                        Tambahkan data di menu Data Mata Pelajaran terlebih dahulu.
                       </p>
                     )}
                   </div>

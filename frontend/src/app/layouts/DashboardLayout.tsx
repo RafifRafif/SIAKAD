@@ -59,7 +59,7 @@ const menuItems: Record<StaticDashboardRole, MenuItem[]> = {
       children: [
         { icon: Users, label: 'Data Guru', path: '/admin/guru' },
         { icon: School, label: 'Data Kelas', path: '/admin/kelas' },
-        { icon: BookOpen, label: 'Data Pelajaran', path: '/admin/data-pelajaran' },
+        { icon: BookOpen, label: 'Data Mata Pelajaran', path: '/admin/data-pelajaran' },
         { icon: GraduationCap, label: 'Data Pembelajaran', path: '/admin/pelajaran' },
         { icon: Users, label: 'Data Siswa', path: '/admin/siswa' },
       ],
@@ -84,6 +84,8 @@ const getGuruMenuItems = (guruAccess: GuruAccess[]): MenuItem[] => {
       icon: ClipboardList,
       label: 'Wali Kelas',
       children: [
+        { label: 'Presensi Kelas', path: '/guru/wali-presensi' },
+        { label: 'Rekap Presensi', path: '/guru/wali-rekap-presensi' },
         { label: 'Monitoring Presensi', path: '/guru/monitoring-presensi' },
         { label: 'Monitoring Nilai', path: '/guru/rekap-nilai' },
         { label: "Monitoring Setoran", path: '/guru/riwayat-quran' },
@@ -98,12 +100,12 @@ const getGuruMenuItems = (guruAccess: GuruAccess[]): MenuItem[] => {
       children: [
         { label: 'Presensi Kelas', path: '/guru/presensi' },
         { label: 'Rekap Presensi', path: '/guru/rekap-absensi' },
-        { label: 'Input Nilai Akhir', path: '/guru/nilai' },
-        { label: 'Rekap Nilai Akhir', path: '/guru/rekap-nilai-akhir' },
         { label: 'Input Nilai Harian dan Quiz', path: '/guru/nilai-harian' },
         { label: 'Rekap Nilai Harian dan Quiz', path: '/guru/nilai-harian-quiz' },
         { label: "Setoran Al-Qur'an", path: '/guru/quran' },
         { label: 'Riwayat Setoran', path: '/guru/riwayat-quran' },
+        { label: 'Input Nilai Akhir', path: '/guru/nilai' },
+        { label: 'Rekap Nilai Akhir', path: '/guru/rekap-nilai-akhir' },
       ],
     });
   }
@@ -115,17 +117,6 @@ const roleNames = {
   admin: 'Administrator',
   guru: 'Guru',
   siswa: 'Siswa',
-};
-
-const adminPageDescriptions: Record<string, string> = {
-  '/admin': '',
-  '/admin/tahun-ajaran': 'Kelola periode akademik aktif, draft, dan arsip',
-  '/admin/guru': 'Kelola data guru dan akses fitur yang diberikan',
-  '/admin/kelas': 'Kelola daftar kelas, wali kelas, dan kapasitas siswa',
-  '/admin/data-pelajaran': 'Kelola master nama pelajaran yang dipakai di data pembelajaran',
-  '/admin/pelajaran': 'Kelola daftar pembelajaran, pengampu, kelas, dan kelompok',
-  '/admin/siswa': 'Kelola data siswa sekolah',
-  '/admin/bobot-penilaian': 'Atur komposisi nilai dan rentang grade yang dipakai guru mata pelajaran',
 };
 
 export default function DashboardLayout({ role, children }: DashboardLayoutProps) {
@@ -146,8 +137,6 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
   const currentPath = pathname ?? '/';
   const isAdminLayout = role === 'admin';
   const showAdminPageHeader = isAdminLayout && currentPath !== '/admin/profile';
-  const adminPageDescription =
-    adminPageDescriptions[currentPath] ?? 'Kelola data akademik SMA IT Ulil Albab';
   const currentMenu = useMemo(
     () => (role === 'guru' ? getGuruMenuItems(guruAccess) : menuItems[role]),
     [guruAccess, role]
@@ -455,11 +444,6 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
                 <h1 className={isAdminLayout ? 'truncate text-2xl font-bold text-[#08173f]' : 'text-xl font-semibold text-gray-900'}>
                   {getCurrentPageTitle()}
                 </h1>
-                {showAdminPageHeader && (
-                  <p className="mt-1 truncate text-sm font-medium text-[#526083]">
-                    {adminPageDescription}
-                  </p>
-                )}
               </div>
             </div>
             {showAdminPageHeader && isAdminLayout && (
@@ -467,9 +451,6 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
                 <h1 className="truncate text-2xl font-bold text-[#08173f]">
                   {getCurrentPageTitle()}
                 </h1>
-                <p className="mt-1 truncate text-sm font-medium text-[#526083]">
-                  {adminPageDescription}
-                </p>
               </div>
             )}
             <div className="relative ml-auto">
@@ -535,7 +516,7 @@ export default function DashboardLayout({ role, children }: DashboardLayoutProps
             </div>
           </div>
         </header>
-        <main className={isAdminLayout ? 'flex-1 px-4 pb-8 sm:px-6 lg:px-8' : 'flex-1 px-4 py-8 sm:px-6 lg:px-8'}>
+        <main className={isAdminLayout ? 'flex-1 px-4 pt-6 pb-8 sm:px-6 lg:px-8' : 'flex-1 px-4 py-8 sm:px-6 lg:px-8'}>
           {children}
         </main>
       </div>

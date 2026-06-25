@@ -1,11 +1,21 @@
 'use client';
 
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
-import { Save, Upload, X } from 'lucide-react';
+import { Download, Save, Upload, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { apiGet, apiPost } from '../../lib/apiClient';
-import type { LearningAssignmentItem } from '../../lib/academicActivityStore';
+import type { LearningAssignmentItem, StudentGradeItem } from '../../lib/academicActivityStore';
+import {
+  downloadExcelTemplate,
+  findImportHeaderRowIndex,
+  findStudentByImportKey,
+  importKeyVariants,
+  normalizeImportHeader,
+  parseDelimitedRows,
+  parseSpreadsheetRows,
+  rowsToCsvText,
+} from '../../lib/gradeImport';
 import {
   defaultBobotPenilaianConfig,
   getGradeLabel,
@@ -20,6 +30,18 @@ import type { StudentItem } from '../../lib/siswaStore';
 type JenisPenilaian = 'UTS' | 'UAS' | 'Quiz' | 'Tugas';
 
 const jenisPenilaianOptions: JenisPenilaian[] = ['UTS', 'UAS', 'Quiz', 'Tugas'];
+const manualJenisPenilaianOptions: JenisPenilaian[] = ['UTS', 'UAS'];
+const autoFinalJenisPenilaian = new Set<JenisPenilaian>(['Quiz', 'Tugas']);
+const tugasHarianOptions = Array.from({ length: 10 }, (_, index) => `Tugas ${index + 1}`);
+const quizHarianOptions = Array.from({ length: 10 }, (_, index) => `Quiz ${index + 1}`);
+
+const averageGradeValue = (values: number[]) => {
+  if (values.length === 0) {
+    return '';
+  }
+
+  return String(Math.round(values.reduce((total, value) => total + value, 0) / values.length));
+};
 
 export default function InputNilai() {
   const [students, setStudents] = useState<StudentItem[]>([]);
@@ -121,7 +143,68 @@ export default function InputNilai() {
 
   const hasSelectedFilters = Boolean(selectedKelas && selectedMapel);
 
+  useEffect(() => {
+    if (!selectedKelas || !selectedMapel || siswaData.length === 0) {
+      return;
+    }
+
+    const query = new URLSearchParams({ kelas: selectedKelas, mapel: selectedMapel });
+    const studentByNis = new Map(students.map((student) => [student.nis, student]));
+
+    void apiGet<StudentGradeItem[]>(`/api/grades?${query.toString()}`)
+      .then((items) => {
+        const grouped = new Map<number, { tugas: number[]; quiz: number[] }>();
+
+        siswaData.forEach((student) => {
+          grouped.set(student.id, { tugas: [], quiz: [] });
+        });
+
+        items.forEach((item) => {
+          const student = studentByNis.get(item.nis);
+
+          if (!student || student.kelas !== selectedKelas) {
+            return;
+          }
+
+          const target = grouped.get(student.id);
+
+          if (!target) {
+            return;
+          }
+
+          if (tugasHarianOptions.includes(item.jenis)) {
+            target.tugas.push(Number(item.nilai));
+          }
+
+          if (quizHarianOptions.includes(item.jenis)) {
+            target.quiz.push(Number(item.nilai));
+          }
+        });
+
+        setNilai((current) => {
+          const next = { ...current };
+
+          siswaData.forEach((student) => {
+            const values = grouped.get(student.id) ?? { tugas: [], quiz: [] };
+
+            next[student.id] = {
+              ...next[student.id],
+              Tugas: averageGradeValue(values.tugas),
+              Quiz: averageGradeValue(values.quiz),
+            };
+          });
+
+          return next;
+        });
+      })
+      .catch(() => showToast('Gagal memuat rata-rata nilai harian dari backend.', 'error'));
+  }, [selectedKelas, selectedMapel, siswaData, students]);
+
   const handleNilaiChange = (id: number, jenis: JenisPenilaian, value: string) => {
+    if (autoFinalJenisPenilaian.has(jenis)) {
+      return;
+    }
+
     const numValue = parseInt(value);
     if (value === '' || (numValue >= 0 && numValue <= 100)) {
       setNilai((current) => ({
@@ -141,10 +224,42 @@ export default function InputNilai() {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => setImportContent(String(reader.result ?? ''));
-    reader.readAsText(file);
-    event.target.value = '';
+    void parseSpreadsheetRows(file)
+      .then((rows) => {
+        if (rows.length === 0) {
+          showToast('File import kosong atau tidak dapat dibaca.', 'error');
+          return;
+        }
+
+        setImportContent(rowsToCsvText(rows));
+      })
+      .catch(() => showToast('File import tidak dapat dibaca. Gunakan XLSX, XLS, atau CSV.', 'error'));
+  };
+
+  const handleDownloadTemplate = () => {
+    if (!hasSelectedFilters || siswaData.length === 0) {
+      showToast('Pilih kelas dan mata pelajaran terlebih dahulu untuk mengunduh template.', 'error');
+      return;
+    }
+
+    downloadExcelTemplate({
+      filename: 'TEMPLATE NILAI AKHIR.xlsx',
+      title: 'TEMPLATE IMPORT NILAI AKHIR',
+      description: `Kelas ${selectedKelas} - ${selectedMapel}. Isi nilai UTS dan UAS dengan angka 0 sampai 100.`,
+      sheetName: 'Template Nilai Akhir',
+      columns: [
+        { key: 'nis', label: 'NIS', width: 14 },
+        { key: 'nama', label: 'Nama Siswa', width: 24 },
+        { key: 'uts', label: 'UTS', width: 12 },
+        { key: 'uas', label: 'UAS', width: 12 },
+      ],
+      rows: siswaData.map((student) => ({
+        nis: student.nis,
+        nama: student.nama,
+        uts: '',
+        uas: '',
+      })),
+    });
   };
 
   const handleImportNilai = () => {
@@ -153,74 +268,107 @@ export default function InputNilai() {
       return;
     }
 
-    const rows = importContent
-      .split(/\r?\n/)
-      .map((row) => row.trim())
-      .filter(Boolean)
-      .map((row) => row.split(',').map((cell) => cell.trim()));
+    const rows = parseDelimitedRows(importContent);
 
     if (rows.length < 2) {
-      showToast('Format import belum valid. Gunakan header nis,uts,uas,quiz,tugas.', 'error');
+      showToast('Format import belum valid. Gunakan header nis,uts,uas.', 'error');
       return;
     }
 
-    const headers = rows[0].map((header) => header.toLowerCase());
+    const headerRowIndex = findImportHeaderRowIndex(rows, ['nis', 'uts', 'uas']);
+
+    if (headerRowIndex === -1) {
+      showToast('Header CSV harus berisi nis, uts, dan uas.', 'error');
+      return;
+    }
+
+    const headers = rows[headerRowIndex].map(normalizeImportHeader);
     const nisIndex = headers.indexOf('nis');
     const jenisIndexes = Object.fromEntries(
-      jenisPenilaianOptions.map((jenis) => [jenis, headers.indexOf(jenis.toLowerCase())])
+      manualJenisPenilaianOptions.map((jenis) => [jenis, headers.indexOf(jenis.toLowerCase())])
     ) as Record<JenisPenilaian, number>;
 
-    if (nisIndex === -1 || jenisPenilaianOptions.some((jenis) => jenisIndexes[jenis] === -1)) {
-      showToast('Header CSV harus berisi nis, uts, uas, quiz, dan tugas.', 'error');
+    if (nisIndex === -1 || manualJenisPenilaianOptions.some((jenis) => jenisIndexes[jenis] === -1)) {
+      showToast('Header CSV harus berisi nis, uts, dan uas.', 'error');
       return;
     }
 
-    const siswaByNis = new Map(siswaData.map((student) => [student.nis, student]));
+    const siswaByNis = new Map<string, StudentItem>();
+
+    siswaData.forEach((student) => {
+      importKeyVariants(student.nis).forEach((key) => {
+        siswaByNis.set(key, student);
+      });
+    });
+
+    let matchedCount = 0;
     let importedCount = 0;
     let invalidCount = 0;
+    const importedByStudentId: Record<number, Partial<Record<JenisPenilaian, string>>> = {};
+
+    rows.slice(headerRowIndex + 1).forEach((row) => {
+      const student = findStudentByImportKey(siswaByNis, row[nisIndex]);
+
+      if (!student) {
+        return;
+      }
+
+      matchedCount += 1;
+
+      const importedNilai = manualJenisPenilaianOptions.reduce<Partial<Record<JenisPenilaian, string>>>(
+        (result, jenis) => {
+          const value = String(row[jenisIndexes[jenis]] ?? '').trim();
+
+          if (value === '') {
+            return result;
+          }
+
+          const numberValue = Number(value);
+
+          if (!Number.isInteger(numberValue) || numberValue < 0 || numberValue > 100) {
+            invalidCount += 1;
+            return result;
+          }
+
+          result[jenis] = String(numberValue);
+          return result;
+        },
+        {}
+      );
+
+      if (Object.keys(importedNilai).length > 0) {
+        importedCount += 1;
+        importedByStudentId[student.id] = {
+          ...importedByStudentId[student.id],
+          ...importedNilai,
+        };
+      }
+    });
+
+    if (matchedCount === 0) {
+      showToast('Tidak ada NIS yang cocok dengan siswa pada kelas ini.', 'error');
+      return;
+    }
+
+    if (importedCount === 0) {
+      showToast('NIS cocok, tetapi belum ada nilai valid yang bisa diimport.', 'error');
+      return;
+    }
 
     setNilai((current) => {
       const next = { ...current };
 
-      rows.slice(1).forEach((row) => {
-        const student = siswaByNis.get(row[nisIndex]);
+      Object.entries(importedByStudentId).forEach(([studentId, importedNilai]) => {
+        const numericStudentId = Number(studentId);
 
-        if (!student) {
-          return;
-        }
-
-        const importedNilai = jenisPenilaianOptions.reduce<Partial<Record<JenisPenilaian, string>>>(
-          (result, jenis) => {
-            const value = row[jenisIndexes[jenis]] ?? '';
-            const numberValue = Number(value);
-
-            if (value === '' || !Number.isInteger(numberValue) || numberValue < 0 || numberValue > 100) {
-              invalidCount += 1;
-              return result;
-            }
-
-            result[jenis] = value;
-            return result;
-          },
-          {}
-        );
-
-        if (Object.keys(importedNilai).length > 0) {
-          importedCount += 1;
-          next[student.id] = {
-            ...next[student.id],
-            ...importedNilai,
-          };
-        }
+        next[numericStudentId] = {
+          ...next[numericStudentId],
+          ...importedNilai,
+        };
       });
 
       return next;
     });
-
-    if (importedCount === 0) {
-      showToast('Tidak ada NIS yang cocok dengan siswa pada kelas ini.', 'error');
-      return;
-    }
 
     setIsImportModalOpen(false);
     setImportContent('');
@@ -334,60 +482,62 @@ export default function InputNilai() {
           <motion.div
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-2xl rounded-xl bg-white shadow-xl"
+            className="w-full max-w-xl rounded-xl bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-              <div>
-                <h3 className="font-semibold text-gray-900">Import Nilai Akhir</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  Gunakan CSV dengan header nis,uts,uas,quiz,tugas
-                </p>
-              </div>
+              <h3 className="text-xl font-bold text-gray-900">Import Nilai Akhir</h3>
               <button
                 type="button"
                 onClick={() => setIsImportModalOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                className="text-gray-400 hover:text-gray-600"
                 aria-label="Tutup modal import nilai"
               >
-                <X size={18} />
+                <X size={24} />
               </button>
             </div>
 
-            <div className="space-y-4 px-6 py-5">
-              <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                Format contoh: nis,uts,uas,quiz,tugas
+            <div className="space-y-5 p-6">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  File Excel
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={handleImportFileChange}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:font-medium file:text-[#2563EB] hover:file:bg-blue-100"
+                />
+                <p className="mt-2 text-sm text-gray-500">
+                  Format yang didukung: `.xlsx`, `.xls`, atau `.csv`
+                </p>
               </div>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={handleImportFileChange}
-                className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-[#2563EB] file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
-              />
-              <textarea
-                value={importContent}
-                onChange={(event) => setImportContent(event.target.value)}
-                rows={8}
-                placeholder={'nis,uts,uas,quiz,tugas\n2026001,85,90,80,88\n2026002,78,82,75,84'}
-                className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm font-mono outline-none focus:ring-2 focus:ring-[#2563EB]"
-              />
-            </div>
 
-            <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-6 py-4">
               <button
                 type="button"
-                onClick={() => setIsImportModalOpen(false)}
-                className="rounded-lg border border-gray-300 px-5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-white"
+                onClick={handleDownloadTemplate}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-[#2563EB] transition-all hover:bg-blue-100"
               >
-                Batal
+                <Download size={18} />
+                <span>Unduh Template Excel</span>
               </button>
-              <button
-                type="button"
-                onClick={handleImportNilai}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#2563EB] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-              >
-                <Upload size={16} />
-                Import
-              </button>
+
+              <div className="flex gap-4 border-t border-gray-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(false)}
+                  className="flex-1 rounded-lg border-2 border-gray-300 px-6 py-3 font-medium text-gray-700 transition-all hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImportNilai}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#2563EB] px-6 py-3 font-medium text-white transition-all hover:bg-blue-700"
+                >
+                  <Upload size={18} />
+                  <span>Import File</span>
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -532,19 +682,24 @@ export default function InputNilai() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{siswa.nis}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{siswa.nama}</td>
-                    {jenisPenilaianOptions.map((jenis) => (
-                      <td key={jenis} className="px-4 py-4 text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={nilai[siswa.id]?.[jenis] ?? ''}
-                          onChange={(e) => handleNilaiChange(siswa.id, jenis, e.target.value)}
-                          placeholder="0-100"
-                          className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-center outline-none focus:ring-2 focus:ring-[#2563EB]"
-                        />
-                      </td>
-                    ))}
+                    {jenisPenilaianOptions.map((jenis) => {
+                      const isAutoValue = autoFinalJenisPenilaian.has(jenis);
+
+                      return (
+                        <td key={jenis} className="px-4 py-4 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={nilai[siswa.id]?.[jenis] ?? ''}
+                            onChange={(e) => handleNilaiChange(siswa.id, jenis, e.target.value)}
+                            placeholder="0-100"
+                            disabled={isAutoValue}
+                            className="w-24 rounded-lg border border-gray-300 px-3 py-2 text-center outline-none focus:ring-2 focus:ring-[#2563EB] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                          />
+                        </td>
+                      );
+                    })}
                     <td className="px-6 py-4">
                       {rataRataSiswa !== null && grade !== null && (
                         <span

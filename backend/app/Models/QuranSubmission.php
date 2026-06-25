@@ -11,6 +11,7 @@ class QuranSubmission extends Model
         'nis',
         'nama',
         'kelas',
+        'tahun_ajaran',
         'tanggal',
         'surah',
         'ayat_mulai',

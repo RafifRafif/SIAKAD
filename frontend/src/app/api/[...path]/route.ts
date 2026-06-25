@@ -93,6 +93,8 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
       }
     }
 
+    responseHeaders.set('Cache-Control', 'no-store, max-age=0');
+
     if (request.method === 'POST' && routePath === 'auth/login') {
       const payload = contentType.includes('application/json')
         ? await response.json()

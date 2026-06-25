@@ -197,6 +197,10 @@ export default function GuruDashboard() {
     let isMounted = true;
 
     const loadAttendanceSummary = async () => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
       try {
         const items = await getAttendanceRecords();
 

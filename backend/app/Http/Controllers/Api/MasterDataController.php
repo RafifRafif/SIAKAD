@@ -27,6 +27,10 @@ use Illuminate\Validation\Rule;
 
 class MasterDataController extends Controller
 {
+    private ?AcademicYear $activeAcademicYearCache = null;
+
+    private bool $activeAcademicYearLoaded = false;
+
     public function academicYears(): JsonResponse
     {
         return response()->json(
@@ -958,15 +962,18 @@ class MasterDataController extends Controller
 
     private function activeAcademicYearValue(): ?string
     {
-        $academicYear = AcademicYear::query()
-            ->where('status', 'Aktif')
-            ->latest('id')
-            ->first();
+        if (! $this->activeAcademicYearLoaded) {
+            $this->activeAcademicYearCache = AcademicYear::query()
+                ->where('status', 'Aktif')
+                ->latest('id')
+                ->first();
+            $this->activeAcademicYearLoaded = true;
+        }
 
-        if ($academicYear === null) {
+        if ($this->activeAcademicYearCache === null) {
             return null;
         }
 
-        return trim($academicYear->nama.' '.$academicYear->semester);
+        return trim($this->activeAcademicYearCache->nama.' '.$this->activeAcademicYearCache->semester);
     }
 }

@@ -22,6 +22,10 @@ use Illuminate\Validation\Rule;
 
 class AcademicActivityController extends Controller
 {
+    private ?AcademicYear $activeAcademicYearCache = null;
+
+    private bool $activeAcademicYearLoaded = false;
+
     public function quranSurahs(): JsonResponse
     {
         $surahs = Cache::remember('equran.v2.surahs', now()->addDay(), function (): array {
@@ -112,6 +116,34 @@ class AcademicActivityController extends Controller
         $payload = $this->gradePayload($request);
         $status = 201;
 
+        if ($this->isLockedDailyQuizGradeType((string) $payload['jenis_penilaian'])) {
+            $existingDailyGrade = StudentGrade::query()
+                ->where('nis', $payload['nis'])
+                ->where('mapel', $payload['mapel'])
+                ->where('jenis_penilaian', $payload['jenis_penilaian'])
+                ->when(
+                    $payload['tahun_ajaran'] !== '',
+                    fn ($query) => $query->where('tahun_ajaran', $payload['tahun_ajaran'])
+                )
+                ->first();
+
+            if ($existingDailyGrade !== null) {
+                return response()->json([
+                    'message' => 'Nilai harian dan quiz yang sudah disimpan tidak dapat diubah kembali.',
+                ], 422);
+            }
+        }
+
+        if ($this->isAutoFinalGradeType((string) $payload['jenis_penilaian'])) {
+            $expectedFinalGrade = $this->dailyAverageForFinalGrade($payload);
+
+            if ($expectedFinalGrade === null || (int) $payload['nilai'] !== $expectedFinalGrade) {
+                return response()->json([
+                    'message' => 'Nilai Tugas dan Quiz akhir harus sesuai rata-rata nilai harian.',
+                ], 422);
+            }
+        }
+
         $grade = StudentGrade::query()
             ->where('nis', $payload['nis'])
             ->where('mapel', $payload['mapel'])
@@ -132,13 +164,43 @@ class AcademicActivityController extends Controller
 
     public function updateGrade(Request $request, StudentGrade $studentGrade): JsonResponse
     {
-        $studentGrade->update($this->gradePayload($request));
+        $payload = $this->gradePayload($request);
+
+        if (
+            $this->isLockedDailyQuizGradeType((string) $studentGrade->jenis_penilaian) ||
+            $this->isLockedDailyQuizGradeType((string) $payload['jenis_penilaian'])
+        ) {
+            return response()->json([
+                'message' => 'Nilai harian dan quiz yang sudah disimpan tidak dapat diubah kembali.',
+            ], 422);
+        }
+
+        if (
+            $this->isAutoFinalGradeType((string) $studentGrade->jenis_penilaian) ||
+            $this->isAutoFinalGradeType((string) $payload['jenis_penilaian'])
+        ) {
+            $expectedFinalGrade = $this->dailyAverageForFinalGrade($payload);
+
+            if ($expectedFinalGrade === null || (int) $payload['nilai'] !== $expectedFinalGrade) {
+                return response()->json([
+                    'message' => 'Nilai Tugas dan Quiz akhir harus sesuai rata-rata nilai harian.',
+                ], 422);
+            }
+        }
+
+        $studentGrade->update($payload);
 
         return response()->json($studentGrade->fresh()->toFrontend());
     }
 
     public function deleteGrade(StudentGrade $studentGrade): JsonResponse
     {
+        if ($this->isLockedDailyQuizGradeType((string) $studentGrade->jenis_penilaian)) {
+            return response()->json([
+                'message' => 'Nilai harian dan quiz yang sudah disimpan tidak dapat dihapus.',
+            ], 422);
+        }
+
         $studentGrade->delete();
 
         return response()->json(['message' => 'Nilai berhasil dihapus.']);
@@ -166,6 +228,12 @@ class AcademicActivityController extends Controller
 
         if ($request->filled('guru')) {
             $query->where('guru', (string) $request->string('guru'));
+        } elseif ($request->boolean('mine')) {
+            $teacherName = $this->teacherNameForRequest($request);
+
+            if ($teacherName !== null) {
+                $query->where('guru', $teacherName);
+            }
         }
 
         if ($request->filled('bulan')) {
@@ -189,6 +257,12 @@ class AcademicActivityController extends Controller
     {
         $payload = $this->attendancePayload($request);
         $status = 201;
+
+        abort_unless(
+            $this->canWriteAttendanceRecord($request, $payload),
+            403,
+            'Anda tidak memiliki akses untuk mengelola presensi kelas ini.'
+        );
 
         $attendanceRecord = AttendanceRecord::query()
             ->where('nis', $payload['nis'])
@@ -214,7 +288,15 @@ class AcademicActivityController extends Controller
         Request $request,
         AttendanceRecord $attendanceRecord,
     ): JsonResponse {
-        $attendanceRecord->update($this->attendancePayload($request));
+        $payload = $this->attendancePayload($request);
+
+        abort_unless(
+            $this->canWriteAttendanceRecord($request, $payload),
+            403,
+            'Anda tidak memiliki akses untuk mengelola presensi kelas ini.'
+        );
+
+        $attendanceRecord->update($payload);
 
         return response()->json($attendanceRecord->fresh()->toFrontend());
     }
@@ -403,9 +485,10 @@ class AcademicActivityController extends Controller
 
     private function applyQuranAcademicYearScope($query, Request $request): void
     {
+        $tahunAjaran = $this->resolvedAcademicYear($request);
         $academicYear = $this->resolvedAcademicYearModel($request);
 
-        if ($academicYear === null) {
+        if ($tahunAjaran === null) {
             if (! $request->filled('tahunAjaran') || $request->string('tahunAjaran') === 'all') {
                 $query->whereRaw('1 = 0');
             }
@@ -413,10 +496,24 @@ class AcademicActivityController extends Controller
             return;
         }
 
-        $query->whereBetween('tanggal', [
-            $academicYear->tanggal_mulai?->format('Y-m-d'),
-            $academicYear->tanggal_selesai?->format('Y-m-d'),
-        ]);
+        $query->where(function ($builder) use ($tahunAjaran, $academicYear): void {
+            $builder->where('tahun_ajaran', $tahunAjaran);
+
+            if (
+                $academicYear !== null &&
+                $academicYear->tanggal_mulai !== null &&
+                $academicYear->tanggal_selesai !== null
+            ) {
+                $builder->orWhere(function ($dateQuery) use ($academicYear): void {
+                    $dateQuery
+                        ->whereNull('tahun_ajaran')
+                        ->whereBetween('tanggal', [
+                            $academicYear->tanggal_mulai->format('Y-m-d'),
+                            $academicYear->tanggal_selesai->format('Y-m-d'),
+                        ]);
+                });
+            }
+        });
     }
 
     private function applyTeacherReadScope($query, Request $request, string $tableName): void
@@ -440,27 +537,45 @@ class AcademicActivityController extends Controller
             return;
         }
 
+        if ($request->boolean('mine')) {
+            return;
+        }
+
         if ($request->filled('guru')) {
             $query->where('guru', $teacherName);
 
             return;
         }
 
-        if ($user->hasRole(User::ROLE_WALI_KELAS)) {
-            $classNames = $this->waliClassNamesForTeacher($teacherName);
+        $hasWaliClassAccess = $user->hasRole(User::ROLE_WALI_KELAS);
+        $hasSubjectTeacherAccess = $user->hasRole(User::ROLE_GURU_MAPEL);
 
-            if ($classNames === []) {
-                $query->whereRaw('1 = 0');
-
-                return;
-            }
-
-            $query->whereIn('kelas', $classNames);
+        if (! $hasWaliClassAccess && ! $hasSubjectTeacherAccess) {
+            $query->whereRaw('1 = 0');
 
             return;
         }
 
-        $this->applyTeacherAssignmentScope($query, $teacherName, $tableName);
+        $classNames = $hasWaliClassAccess ? $this->waliClassNamesForTeacher($teacherName) : [];
+
+        $query->where(function ($scopeQuery) use (
+            $classNames,
+            $hasSubjectTeacherAccess,
+            $teacherName,
+            $tableName
+        ): void {
+            $scopeQuery->whereRaw('1 = 0');
+
+            if ($classNames !== []) {
+                $scopeQuery->orWhereIn('kelas', $classNames);
+            }
+
+            if ($hasSubjectTeacherAccess) {
+                $scopeQuery->orWhere(function ($assignmentQuery) use ($teacherName, $tableName): void {
+                    $this->applyTeacherAssignmentScope($assignmentQuery, $teacherName, $tableName);
+                });
+            }
+        });
     }
 
     private function applyTeacherAssignmentScope($query, string $teacherName, string $tableName): void
@@ -506,21 +621,19 @@ class AcademicActivityController extends Controller
             return;
         }
 
-        if ($user->hasRole(User::ROLE_WALI_KELAS)) {
-            $classNames = $this->waliClassNamesForTeacher($teacherName);
+        $classNames = $this->quranAccessibleClassNamesForTeacher($user, $teacherName, $request);
 
-            if ($classNames === []) {
-                $query->whereRaw('1 = 0');
-
-                return;
-            }
-
-            $query->whereIn('kelas', $classNames);
+        if ($classNames === []) {
+            $query->where('guru', $teacherName);
 
             return;
         }
 
-        $query->where('guru', $teacherName);
+        $query->where(function ($builder) use ($teacherName, $classNames): void {
+            $builder
+                ->where('guru', $teacherName)
+                ->orWhereIn('kelas', $classNames);
+        });
     }
 
     private function resolvedAcademicYear(Request $request): ?string
@@ -553,10 +666,15 @@ class AcademicActivityController extends Controller
 
     private function activeAcademicYear(): ?AcademicYear
     {
-        return AcademicYear::query()
-            ->where('status', 'Aktif')
-            ->latest('id')
-            ->first();
+        if (! $this->activeAcademicYearLoaded) {
+            $this->activeAcademicYearCache = AcademicYear::query()
+                ->where('status', 'Aktif')
+                ->latest('id')
+                ->first();
+            $this->activeAcademicYearLoaded = true;
+        }
+
+        return $this->activeAcademicYearCache;
     }
 
     /**
@@ -571,6 +689,85 @@ class AcademicActivityController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function quranAccessibleClassNamesForTeacher(User $user, string $teacherName, Request $request): array
+    {
+        $tahunAjaran = $this->resolvedAcademicYear($request);
+
+        if ($tahunAjaran === null) {
+            return [];
+        }
+
+        $classNames = [];
+
+        if ($user->hasRole(User::ROLE_WALI_KELAS)) {
+            $classNames = array_merge(
+                $classNames,
+                SchoolClass::query()
+                    ->where('wali_kelas', $teacherName)
+                    ->where('tahun_ajaran', $tahunAjaran)
+                    ->pluck('nama')
+                    ->all(),
+            );
+        }
+
+        if ($user->hasRole(User::ROLE_GURU_MAPEL)) {
+            $classNames = array_merge(
+                $classNames,
+                LearningAssignment::query()
+                    ->where('guru_pengampu', $teacherName)
+                    ->where('tahun_ajaran', $tahunAjaran)
+                    ->pluck('kelas')
+                    ->all(),
+            );
+        }
+
+        return array_values(array_unique(array_filter($classNames)));
+    }
+
+    private function isLockedDailyQuizGradeType(string $jenisPenilaian): bool
+    {
+        return preg_match('/^(tugas|quiz)\s*([1-9]|10)$/i', trim($jenisPenilaian)) === 1;
+    }
+
+    private function isAutoFinalGradeType(string $jenisPenilaian): bool
+    {
+        return in_array(strtolower(trim($jenisPenilaian)), ['tugas', 'quiz'], true);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function dailyAverageForFinalGrade(array $payload): ?int
+    {
+        $jenisPenilaian = strtolower(trim((string) $payload['jenis_penilaian']));
+        $prefix = $jenisPenilaian === 'quiz' ? 'Quiz' : 'Tugas';
+
+        $query = StudentGrade::query()
+            ->where('nis', $payload['nis'])
+            ->where('mapel', $payload['mapel'])
+            ->where('jenis_penilaian', 'like', $prefix . '%');
+
+        if (($payload['tahun_ajaran'] ?? '') !== '') {
+            $query->where('tahun_ajaran', $payload['tahun_ajaran']);
+        }
+
+        $values = $query
+            ->get()
+            ->filter(fn (StudentGrade $grade) => $this->isLockedDailyQuizGradeType((string) $grade->jenis_penilaian))
+            ->pluck('nilai')
+            ->map(fn ($value) => (int) $value)
+            ->values();
+
+        if ($values->isEmpty()) {
+            return null;
+        }
+
+        return (int) round($values->avg());
     }
 
     /**
@@ -642,6 +839,56 @@ class AcademicActivityController extends Controller
             'keterangan' => $data['keterangan'] ?? null,
             'guru' => $data['guru'] ?? $this->teacherNameForRequest($request),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function canWriteAttendanceRecord(Request $request, array $payload): bool
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        if ($user === null) {
+            return false;
+        }
+
+        if ($user->hasRole(User::ROLE_ADMIN)) {
+            return true;
+        }
+
+        $teacherName = $this->teacherNameForRequest($request);
+
+        if ($teacherName === null) {
+            return false;
+        }
+
+        $kelas = trim((string) ($payload['kelas'] ?? ''));
+        $mapel = trim((string) ($payload['mapel'] ?? ''));
+        $tahunAjaran = trim((string) ($payload['tahun_ajaran'] ?? ''));
+
+        if ($kelas === '') {
+            return false;
+        }
+
+        if ($user->hasRole(User::ROLE_WALI_KELAS) && $mapel === '') {
+            return SchoolClass::query()
+                ->where('wali_kelas', $teacherName)
+                ->where('nama', $kelas)
+                ->when($tahunAjaran !== '', fn ($query) => $query->where('tahun_ajaran', $tahunAjaran))
+                ->exists();
+        }
+
+        if ($user->hasRole(User::ROLE_GURU_MAPEL) && $mapel !== '') {
+            return LearningAssignment::query()
+                ->where('guru_pengampu', $teacherName)
+                ->where('kelas', $kelas)
+                ->where('nama', $mapel)
+                ->when($tahunAjaran !== '', fn ($query) => $query->where('tahun_ajaran', $tahunAjaran))
+                ->exists();
+        }
+
+        return false;
     }
 
     private function teacherNameForRequest(Request $request): ?string
@@ -780,6 +1027,7 @@ class AcademicActivityController extends Controller
             'nis' => trim($data['nis']),
             'nama' => isset($data['nama']) ? trim($data['nama']) : ($student?->nama ?? ''),
             'kelas' => isset($data['kelas']) ? trim($data['kelas']) : $student?->kelas,
+            'tahun_ajaran' => $student?->tahun_ajaran ?? $this->resolvedAcademicYear($request),
             'tanggal' => $data['tanggal'],
             'surah' => trim($data['surah']),
             'ayat_mulai' => $data['ayatMulai'],

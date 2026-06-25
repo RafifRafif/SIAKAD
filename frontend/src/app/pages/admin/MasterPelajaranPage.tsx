@@ -40,7 +40,7 @@ export default function MasterPelajaranPage() {
   useEffect(() => {
     void apiGet<MasterPelajaran[]>('/api/subjects')
       .then((items) => setPelajaran(dedupePelajaran(items)))
-      .catch(() => showToast('Gagal memuat data pelajaran dari backend.', 'error'));
+      .catch(() => showToast('Gagal memuat data mata pelajaran dari backend.', 'error'));
   }, []);
 
   useEffect(() => {
@@ -100,9 +100,9 @@ export default function MasterPelajaranPage() {
     try {
       await apiDelete(`/api/subjects/${id}`);
       setPelajaran((current) => current.filter((item) => item.id !== id));
-      showToast('Data pelajaran berhasil dihapus!', 'success');
+      showToast('Data mata pelajaran berhasil dihapus!', 'success');
     } catch {
-      showToast('Gagal menghapus data pelajaran.', 'error');
+      showToast('Gagal menghapus data mata pelajaran.', 'error');
     }
   };
 
@@ -115,7 +115,7 @@ export default function MasterPelajaranPage() {
 
     const trimmedNama = formData.nama.trim();
     if (!trimmedNama) {
-      showToast('Nama pelajaran wajib diisi!', 'error');
+      showToast('Nama mata pelajaran wajib diisi!', 'error');
       return;
     }
 
@@ -131,7 +131,7 @@ export default function MasterPelajaranPage() {
         item.id !== editingPelajaran?.id
     );
     if (duplicatePelajaran) {
-      showToast('Nama pelajaran sudah ada!', 'error');
+      showToast('Nama mata pelajaran sudah ada!', 'error');
       return;
     }
 
@@ -146,16 +146,16 @@ export default function MasterPelajaranPage() {
           payload
         );
         setPelajaran((current) => upsertPelajaran(current, updatedPelajaran));
-        showToast('Data pelajaran berhasil diperbarui!', 'success');
+        showToast('Data mata pelajaran berhasil diperbarui!', 'success');
       } else {
         const newPelajaran = await apiPost<MasterPelajaran>('/api/subjects', payload);
         setPelajaran((current) => upsertPelajaran(current, newPelajaran));
-        showToast('Data pelajaran berhasil ditambahkan!', 'success');
+        showToast('Data mata pelajaran berhasil ditambahkan!', 'success');
       }
 
       setShowModal(false);
     } catch (error) {
-      showToast(getApiErrorMessage(error, 'Gagal menyimpan data pelajaran.'), 'error');
+      showToast(getApiErrorMessage(error, 'Gagal menyimpan data mata pelajaran.'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -178,7 +178,7 @@ export default function MasterPelajaranPage() {
           className="flex items-center gap-2 rounded-lg bg-[#2563EB] px-6 py-3 font-medium text-white shadow-md transition-all hover:bg-blue-700"
         >
           <Plus size={20} />
-          <span>Tambah Pelajaran</span>
+          <span>Tambah Mata Pelajaran</span>
         </button>
       </div>
 
@@ -188,7 +188,7 @@ export default function MasterPelajaranPage() {
           <Search size={20} className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Cari nama pelajaran..."
+            placeholder="Cari nama mata pelajaran..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg border border-gray-300 py-2 pr-4 pl-10 outline-none focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
@@ -214,11 +214,11 @@ export default function MasterPelajaranPage() {
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
         {filteredPelajaran.length === 0 ? (
           <EmptyState
-            message={filterTahunAjaran ? 'Tidak ada data pelajaran' : 'Pilih tahun ajaran'}
+            message={filterTahunAjaran ? 'Tidak ada data mata pelajaran' : 'Pilih tahun ajaran'}
             description={
               filterTahunAjaran
-                ? 'Silakan tambahkan master pelajaran baru'
-                : 'Data pelajaran akan tampil setelah tahun ajaran dipilih'
+                ? 'Silakan tambahkan master mata pelajaran baru'
+                : 'Data mata pelajaran akan tampil setelah tahun ajaran dipilih'
             }
           />
         ) : (
@@ -228,7 +228,7 @@ export default function MasterPelajaranPage() {
                 <thead className="border-b border-gray-200 bg-gray-50">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-semibold uppercase text-gray-600">
-                      Nama Pelajaran
+                      Nama Mata Pelajaran
                     </th>
                     <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-gray-600">
                       Aksi
@@ -256,8 +256,8 @@ export default function MasterPelajaranPage() {
                             <Edit size={18} />
                           </button>
                           <DeleteConfirmationDialog
-                            title="Hapus Data Pelajaran?"
-                            description="Data pelajaran akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
+                            title="Hapus Data Mata Pelajaran?"
+                            description="Data mata pelajaran akan dihapus dari aplikasi dan database. Tindakan ini tidak bisa dibatalkan."
                             itemName={`${item.nama} - ${item.tahunAjaran}`}
                             onConfirm={() => handleDelete(item.id)}
                           >
@@ -276,7 +276,7 @@ export default function MasterPelajaranPage() {
               currentPage={currentPage}
               totalItems={filteredPelajaran.length}
               itemsPerPage={itemsPerPage}
-              itemLabel="pelajaran"
+              itemLabel="mata pelajaran"
               onPageChange={setCurrentPage}
             />
           </>
@@ -301,7 +301,7 @@ export default function MasterPelajaranPage() {
             >
               <div className="flex items-center justify-between border-b px-6 py-4">
                 <h3 className="text-xl font-bold text-gray-900">
-                  {editingPelajaran ? 'Edit Data Pelajaran' : 'Tambah Data Pelajaran'}
+                  {editingPelajaran ? 'Edit Data Mata Pelajaran' : 'Tambah Data Mata Pelajaran'}
                 </h3>
                 <button onClick={() => setShowModal(false)}>
                   <X size={24} />
@@ -311,7 +311,7 @@ export default function MasterPelajaranPage() {
               <form onSubmit={handleSubmit} className="space-y-4 p-6">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Nama Pelajaran
+                    Nama Mata Pelajaran
                   </label>
                   <div className="relative">
                     <BookOpen

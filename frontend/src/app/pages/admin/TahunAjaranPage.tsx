@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { Toast, useToast } from '../../components/dashboard/Toast';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../../lib/apiClient';
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost, apiPut } from '../../lib/apiClient';
 import {
   defaultTahunAjaranData,
   type TahunAjaranItem as TahunAjaran,
@@ -106,6 +106,11 @@ export default function TahunAjaranPage() {
       return;
     }
 
+    if (formData.tanggalMulai && formData.tanggalSelesai && formData.tanggalSelesai < formData.tanggalMulai) {
+      showToast('Tanggal selesai tidak boleh lebih awal dari tanggal mulai.', 'error');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -128,8 +133,8 @@ export default function TahunAjaranPage() {
       }
 
       setShowModal(false);
-    } catch {
-      showToast('Gagal menyimpan tahun ajaran.', 'error');
+    } catch (error) {
+      showToast(errorMessageFromApi(error, 'Gagal menyimpan tahun ajaran.'), 'error');
     } finally {
       setIsSaving(false);
     }
@@ -310,6 +315,7 @@ export default function TahunAjaranPage() {
                       type="date"
                       required
                       value={formData.tanggalMulai}
+                      max={formData.tanggalSelesai || undefined}
                       onChange={(e) => setFormData({ ...formData, tanggalMulai: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
@@ -320,6 +326,7 @@ export default function TahunAjaranPage() {
                       type="date"
                       required
                       value={formData.tanggalSelesai}
+                      min={formData.tanggalMulai || undefined}
                       onChange={(e) => setFormData({ ...formData, tanggalSelesai: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 outline-none focus:ring-2 focus:ring-[#2563EB]"
                     />
@@ -382,4 +389,30 @@ const statusDotClass = (status: TahunAjaran['status']) => {
   }
 
   return 'bg-black';
+};
+
+const errorMessageFromApi = (error: unknown, fallback: string) => {
+  if (!(error instanceof ApiError)) {
+    return fallback;
+  }
+
+  if (typeof error.payload === 'object' && error.payload !== null) {
+    const payload = error.payload as {
+      message?: unknown;
+      errors?: Record<string, unknown>;
+    };
+    const firstValidationError = payload.errors
+      ? Object.values(payload.errors).flat().find((message) => typeof message === 'string')
+      : null;
+
+    if (typeof firstValidationError === 'string') {
+      return firstValidationError;
+    }
+
+    if (typeof payload.message === 'string') {
+      return payload.message;
+    }
+  }
+
+  return error.message || fallback;
 };

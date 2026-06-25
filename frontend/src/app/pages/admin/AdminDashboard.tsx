@@ -111,7 +111,7 @@ export default function AdminDashboard() {
     { label: 'Data Siswa', value: totalSiswa, color: '#2563EB' },
     { label: 'Data Guru', value: totalGuru, color: '#16A34A' },
     { label: 'Data Kelas', value: totalKelas, color: '#7C3AED' },
-    { label: 'Data Pelajaran', value: totalPelajaran, color: '#F97316' },
+    { label: 'Data Mata Pelajaran', value: totalPelajaran, color: '#F97316' },
   ];
   let gradientCursor = 0;
   const donutGradient =
@@ -149,8 +149,8 @@ export default function AdminDashboard() {
     {
       icon: BookOpen,
       color: 'bg-orange-50 text-orange-500',
-      title: 'Pelajaran aktif',
-      description: `${totalPelajaran} pelajaran terhubung ke sistem`,
+      title: 'Mata pelajaran aktif',
+      description: `${totalPelajaran} mata pelajaran terhubung ke sistem`,
       time: 'Hari ini',
     },
     {
@@ -212,9 +212,9 @@ export default function AdminDashboard() {
         />
         <MetricCard
           icon={BookOpen}
-          label="Data Pelajaran"
+          label="Data Mata Pelajaran"
           value={String(totalPelajaran)}
-          caption="Pelajaran aktif"
+          caption="Mata pelajaran aktif"
           href="/admin/data-pelajaran"
           color="orange"
         />

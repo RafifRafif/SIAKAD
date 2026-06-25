@@ -31,6 +31,10 @@ use ZipArchive;
 
 class FrontendFeatureController extends Controller
 {
+    private ?AcademicYear $activeAcademicYearCache = null;
+
+    private bool $activeAcademicYearLoaded = false;
+
     public function profile(Request $request): JsonResponse
     {
         /** @var User $user */
@@ -772,10 +776,14 @@ class FrontendFeatureController extends Controller
             ]);
         }
 
-        $headers = array_map(fn ($header) => $this->normalizeHeader((string) $header), $rows[0]);
+        $headerRowIndex = $this->importHeaderRowIndex($rows);
+        $headers = array_map(
+            fn ($header) => $this->normalizeHeader((string) $header),
+            $rows[$headerRowIndex]
+        );
         $dataRows = [];
 
-        foreach (array_slice($rows, 1) as $row) {
+        foreach (array_slice($rows, $headerRowIndex + 1) as $row) {
             $mapped = [
                 'nis' => '',
                 'nisn' => '',
@@ -816,6 +824,27 @@ class FrontendFeatureController extends Controller
         }
 
         return $dataRows;
+    }
+
+    /**
+     * @param list<list<mixed>> $rows
+     */
+    private function importHeaderRowIndex(array $rows): int
+    {
+        foreach ($rows as $index => $row) {
+            $fields = array_values(array_filter(array_map(
+                fn ($header) => $this->fieldFromHeader($this->normalizeHeader((string) $header)),
+                $row
+            )));
+
+            if (in_array('nama', $fields, true) && (in_array('nis', $fields, true) || in_array('nip', $fields, true))) {
+                return $index;
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'file' => 'File import tidak memiliki header yang valid.',
+        ]);
     }
 
     /**
@@ -1333,10 +1362,15 @@ class FrontendFeatureController extends Controller
 
     private function activeAcademicYear(): ?AcademicYear
     {
-        return AcademicYear::query()
-            ->where('status', 'Aktif')
-            ->latest('id')
-            ->first();
+        if (! $this->activeAcademicYearLoaded) {
+            $this->activeAcademicYearCache = AcademicYear::query()
+                ->where('status', 'Aktif')
+                ->latest('id')
+                ->first();
+            $this->activeAcademicYearLoaded = true;
+        }
+
+        return $this->activeAcademicYearCache;
     }
 
     private function activeAcademicYearValue(): ?string

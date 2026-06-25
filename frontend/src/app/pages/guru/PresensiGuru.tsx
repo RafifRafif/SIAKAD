@@ -54,9 +54,20 @@ const statusOptions: Array<{
   },
 ];
 
-export default function PresensiGuru() {
+interface ProfileResponse {
+  nama: string;
+}
+
+interface PresensiGuruProps {
+  mode?: 'mapel' | 'waliKelas';
+}
+
+export default function PresensiGuru({ mode = 'mapel' }: PresensiGuruProps) {
+  const isWaliKelasMode = mode === 'waliKelas';
   const [students, setStudents] = useState<StudentItem[]>([]);
   const [learningAssignments, setLearningAssignments] = useState<LearningAssignmentItem[]>([]);
+  const [schoolClasses, setSchoolClasses] = useState<KelasItem[]>([]);
+  const [teacherName, setTeacherName] = useState('');
   const [selectedKelas, setSelectedKelas] = useState('');
   const [selectedMapel, setSelectedMapel] = useState('');
   const [tanggal, setTanggal] = useState(new Date().toISOString().split('T')[0]);
@@ -82,9 +93,35 @@ export default function PresensiGuru() {
       .catch(() => showToast('Gagal memuat data pelajaran yang diampu dari backend.', 'error'));
   }, []);
 
+  useEffect(() => {
+    if (!isWaliKelasMode) {
+      return;
+    }
+
+    void Promise.all([
+      apiGet<KelasItem[]>('/api/school-classes'),
+      apiGet<ProfileResponse>('/api/profile'),
+    ])
+      .then(([kelasItems, profile]) => {
+        setSchoolClasses(kelasItems);
+        setTeacherName(profile.nama ?? '');
+      })
+      .catch(() => showToast('Gagal memuat data kelas wali dari backend.', 'error'));
+  }, [isWaliKelasMode]);
+
   const kelasOptions = useMemo<KelasItem[]>(
-    () =>
-      Array.from(
+    () => {
+      if (isWaliKelasMode) {
+        return Array.from(
+          new Map(
+            schoolClasses
+              .filter((item) => item.waliKelas === teacherName)
+              .map((item) => [item.nama, item])
+          ).values()
+        );
+      }
+
+      return Array.from(
         new Map(
           learningAssignments.map((item) => [
             item.kelas,
@@ -98,13 +135,14 @@ export default function PresensiGuru() {
             },
           ])
         ).values()
-      ),
-    [learningAssignments]
+      );
+    },
+    [isWaliKelasMode, learningAssignments, schoolClasses, teacherName]
   );
 
   const mapelOptions = useMemo<MasterPelajaran[]>(
     () =>
-      selectedKelas
+      selectedKelas && !isWaliKelasMode
         ? Array.from(
             new Map(
               learningAssignments
@@ -120,18 +158,20 @@ export default function PresensiGuru() {
             ).values()
           )
         : [],
-    [learningAssignments, selectedKelas]
+    [isWaliKelasMode, learningAssignments, selectedKelas]
   );
 
   const siswaData = useMemo(
     () =>
-      selectedKelas && selectedMapel
+      selectedKelas && (isWaliKelasMode || selectedMapel)
         ? students.filter((student) => student.kelas === selectedKelas)
         : [],
-    [selectedKelas, selectedMapel, students]
+    [isWaliKelasMode, selectedKelas, selectedMapel, students]
   );
 
-  const hasSelectedFilters = Boolean(selectedKelas && selectedMapel);
+  const hasSelectedFilters = isWaliKelasMode
+    ? Boolean(selectedKelas)
+    : Boolean(selectedKelas && selectedMapel);
 
   const statusCounts = useMemo(
     () => ({
@@ -198,7 +238,7 @@ export default function PresensiGuru() {
       parts.push(`Keterangan: ${keteranganIzin}`);
     }
 
-    if (capaian) {
+    if (!isWaliKelasMode && capaian) {
       parts.push(`Topik Pembelajaran: ${capaian}`);
     }
 
@@ -210,8 +250,13 @@ export default function PresensiGuru() {
       return;
     }
 
-    if (!selectedKelas || !selectedMapel) {
-      showToast('Pilih kelas dan mata pelajaran terlebih dahulu.', 'error');
+    if (!selectedKelas || (!isWaliKelasMode && !selectedMapel)) {
+      showToast(
+        isWaliKelasMode
+          ? 'Pilih kelas terlebih dahulu.'
+          : 'Pilih kelas dan mata pelajaran terlebih dahulu.',
+        'error'
+      );
       return;
     }
 
@@ -244,7 +289,7 @@ export default function PresensiGuru() {
             nama: student.nama,
             kelas: student.kelas,
             tahunAjaran: student.tahunAjaran,
-            mapel: selectedMapel || null,
+            mapel: isWaliKelasMode ? null : selectedMapel || null,
             tanggal,
             status: presensi[student.id],
             keterangan: buildKeteranganPresensi(student.id),
@@ -272,7 +317,7 @@ export default function PresensiGuru() {
       ))}
 
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className={`grid gap-4 ${isWaliKelasMode ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Pilih Kelas
@@ -306,45 +351,49 @@ export default function PresensiGuru() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Mata Pelajaran
-            </label>
-            <select
-              value={selectedMapel}
-              onChange={(e) => setSelectedMapel(e.target.value)}
-              disabled={!selectedKelas}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
-            >
-              <option value="" disabled>
-                Pilih Mata Pelajaran
-              </option>
-              {mapelOptions.map((mapel) => (
-                <option key={mapel.id} value={mapel.nama}>
-                  {mapel.nama}
+          {!isWaliKelasMode && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mata Pelajaran
+              </label>
+              <select
+                value={selectedMapel}
+                onChange={(e) => setSelectedMapel(e.target.value)}
+                disabled={!selectedKelas}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2563EB] outline-none"
+              >
+                <option value="" disabled>
+                  Pilih Mata Pelajaran
                 </option>
-              ))}
-            </select>
-          </div>
+                {mapelOptions.map((mapel) => (
+                  <option key={mapel.id} value={mapel.nama}>
+                    {mapel.nama}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-gray-200 p-6 sm:flex-row sm:items-start sm:justify-between">
           <div className="w-full flex-1">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Topik Pembelajaran
-              </label>
-              <textarea
-                value={capaianPembelajaran}
-                onChange={(event) => setCapaianPembelajaran(event.target.value)}
-                rows={2}
-                placeholder="Tuliskan topik pembelajaran pada pertemuan ini"
-                className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
-              />
-            </div>
-            <div className="mt-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            {!isWaliKelasMode && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Topik Pembelajaran
+                </label>
+                <textarea
+                  value={capaianPembelajaran}
+                  onChange={(event) => setCapaianPembelajaran(event.target.value)}
+                  rows={2}
+                  placeholder="Tuliskan topik pembelajaran pada pertemuan ini"
+                  className="w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[#2563EB]"
+                />
+              </div>
+            )}
+            <div className={`${isWaliKelasMode ? '' : 'mt-3'} flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between`}>
               <p className="text-sm font-medium text-gray-700">
                 Pilih satu status presensi untuk setiap siswa
               </p>
@@ -387,14 +436,18 @@ export default function PresensiGuru() {
               {!hasSelectedFilters && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
-                    Pilih kelas dan mata pelajaran terlebih dahulu untuk menampilkan data presensi.
+                    {isWaliKelasMode
+                      ? 'Pilih kelas terlebih dahulu untuk menampilkan data presensi.'
+                      : 'Pilih kelas dan mata pelajaran terlebih dahulu untuk menampilkan data presensi.'}
                   </td>
                 </tr>
               )}
               {hasSelectedFilters && siswaData.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
-                    Belum ada data siswa untuk kelas dan mata pelajaran yang dipilih.
+                    {isWaliKelasMode
+                      ? 'Belum ada data siswa untuk kelas yang dipilih.'
+                      : 'Belum ada data siswa untuk kelas dan mata pelajaran yang dipilih.'}
                   </td>
                 </tr>
               )}

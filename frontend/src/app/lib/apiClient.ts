@@ -33,6 +33,10 @@ export async function apiRequest<T>(
   const requestUrl = `${API_BASE_URL}${path}`;
   const requestKey = method === 'GET' && !hasBody ? requestUrl : null;
 
+  if (method !== 'GET') {
+    inflightGetRequests.clear();
+  }
+
   if (hasBody && !isFormData && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
@@ -46,6 +50,7 @@ export async function apiRequest<T>(
       ...options,
       headers,
       credentials: 'include',
+      cache: 'no-store',
       body: hasBody
         ? (isFormData ? (options.body as BodyInit) : JSON.stringify(options.body))
         : undefined,
@@ -100,6 +105,7 @@ export async function apiDownload(path: string, fallbackFilename: string) {
       'X-Requested-With': 'XMLHttpRequest',
     },
     credentials: 'include',
+    cache: 'no-store',
   });
 
   if (!response.ok) {

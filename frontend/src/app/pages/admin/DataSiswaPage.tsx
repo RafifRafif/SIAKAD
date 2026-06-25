@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Edit, Trash2, X, Upload, Eye, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import * as XLSX from 'xlsx';
 import { DeleteConfirmationDialog } from '../../components/dashboard/DeleteConfirmationDialog';
 import { EmptyState } from '../../components/dashboard/EmptyState';
 import { useToast, Toast } from '../../components/dashboard/Toast';
 import { ApiError, apiDelete, apiGet, apiPost, apiPut, apiUpload } from '../../lib/apiClient';
+import { downloadExcelTemplate } from '../../lib/gradeImport';
 import { defaultGuruData, type GuruItem } from '../../lib/guruStore';
 import { type KelasItem } from '../../lib/kelasStore';
 import { defaultSiswaData, type StudentItem as Student } from '../../lib/siswaStore';
@@ -166,47 +166,30 @@ export default function DataSiswaPage() {
         telepon: '081234567890',
       },
     ];
-    const worksheet = XLSX.utils.json_to_sheet(rows, {
-      header: [
-        'nis',
-        'nisn',
-        'nik',
-        'nama',
-        'tahunAjaran',
-        'kelas',
-        'waliKelas',
-        'asalSekolah',
-        'namaOrangTua',
-        'jenisKelamin',
-        'tempatLahir',
-        'tanggalLahir',
-        'alamat',
-        'email',
-        'telepon',
+    downloadExcelTemplate({
+      filename: 'TEMPLATE SISWA.xlsx',
+      title: 'TEMPLATE IMPORT DATA SISWA',
+      description: 'Gunakan template ini untuk mengimport data siswa. Isi data mulai baris contoh atau tambahkan baris baru di bawahnya.',
+      sheetName: 'Template Siswa',
+      columns: [
+        { key: 'nis', label: 'NIS', width: 14 },
+        { key: 'nisn', label: 'NISN', width: 16 },
+        { key: 'nik', label: 'NIK', width: 20 },
+        { key: 'nama', label: 'Nama Lengkap', width: 24 },
+        { key: 'tahunAjaran', label: 'Tahun Ajaran', width: 20 },
+        { key: 'kelas', label: 'Kelas', width: 12 },
+        { key: 'waliKelas', label: 'Wali Kelas', width: 22 },
+        { key: 'asalSekolah', label: 'Asal Sekolah', width: 22 },
+        { key: 'namaOrangTua', label: 'Nama Orang Tua', width: 24 },
+        { key: 'jenisKelamin', label: 'Jenis Kelamin', width: 16 },
+        { key: 'tempatLahir', label: 'Tempat Lahir', width: 18 },
+        { key: 'tanggalLahir', label: 'Tanggal Lahir', width: 16 },
+        { key: 'alamat', label: 'Alamat', width: 32 },
+        { key: 'email', label: 'Email', width: 28 },
+        { key: 'telepon', label: 'Telepon', width: 18 },
       ],
+      rows,
     });
-    const workbook = XLSX.utils.book_new();
-
-    worksheet['!cols'] = [
-      { wch: 14 },
-      { wch: 16 },
-      { wch: 20 },
-      { wch: 24 },
-      { wch: 18 },
-      { wch: 10 },
-      { wch: 20 },
-      { wch: 20 },
-      { wch: 24 },
-      { wch: 14 },
-      { wch: 16 },
-      { wch: 14 },
-      { wch: 28 },
-      { wch: 24 },
-      { wch: 16 },
-    ];
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template Siswa');
-    XLSX.writeFile(workbook, 'template-import-siswa.xlsx');
   };
 
   const handleImportSubmit = async () => {
