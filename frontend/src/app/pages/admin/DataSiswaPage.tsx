@@ -453,9 +453,6 @@ export default function DataSiswaPage() {
                       NIS
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      NISN
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Nama
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -482,9 +479,6 @@ export default function DataSiswaPage() {
                     >
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         {student.nis}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {student.nisn || '-'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">{student.nama}</td>
                       <td className="px-6 py-4 text-sm">

@@ -383,6 +383,7 @@ class FrontendFeatureController extends Controller
         $tahunAjaran = (string) $request->string('tahunAjaran', $this->resolvedAcademicYear($request) ?? $student?->tahun_ajaran ?? '');
         $semester = $this->semesterFromTahunAjaran($tahunAjaran);
         $kelas = $student?->kelas ?? '-';
+        $waliKelas = $this->studentHomeroomTeacherName($student, $tahunAjaran);
         $grades = StudentGrade::query()
             ->where('nis', $nis)
             ->when($tahunAjaran !== '', fn ($query) => $query->where('tahun_ajaran', $tahunAjaran))
@@ -425,6 +426,7 @@ class FrontendFeatureController extends Controller
             'kelas' => $kelas,
             'tahunAjaran' => $tahunAjaran !== '' ? $tahunAjaran : '-',
             'semester' => $semester,
+            'waliKelas' => $waliKelas,
             'rows' => $rows,
             'totalNilai' => count($nilaiTerisi) > 0 ? (string) round($totalNilai, 2) : '-',
             'rataRata' => $rataRata !== null ? (string) $rataRata : '-',
@@ -433,9 +435,11 @@ class FrontendFeatureController extends Controller
             'alpha' => (string) $attendance->filter(fn (AttendanceRecord $record) => in_array($record->status, ['alpha', 'Alpha', 'Tidak Hadir'], true))->count(),
         ]);
 
+        $filename = 'RAPORT - '.$this->safeReportFilename($student?->nama ?? $nis).'.pdf';
+
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="rapor-'.$nis.'.pdf"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
@@ -1605,6 +1609,7 @@ class FrontendFeatureController extends Controller
      *   kelas: string,
      *   tahunAjaran: string,
      *   semester: string,
+     *   waliKelas: string,
      *   rows: list<array{mapel: string, guru: string, angka: string, predikat: string}>,
      *   totalNilai: string,
      *   rataRata: string,
@@ -1616,29 +1621,39 @@ class FrontendFeatureController extends Controller
     private function studentReportPdf(array $report): string
     {
         $content = '';
-        $logoPath = dirname(base_path()).DIRECTORY_SEPARATOR.'frontend'.DIRECTORY_SEPARATOR.'public'.DIRECTORY_SEPARATOR.'logo.png';
-        $content .= $this->pdfImage('Im1', 42, 775, 38, 38);
-        $content .= $this->pdfTextAt('LAPORAN HASIL BELAJAR SISWA ONLINE', 182, 808, 10, true);
-        $content .= $this->pdfTextAt('SMA IT ULIL ALBAB', 238, 794, 11, true);
-        $content .= $this->pdfImage('Im1', 515, 775, 38, 38);
-        $content .= $this->pdfLine(35, 764, 560, 764, 2);
-        $content .= $this->pdfTextAt('RAPOR HASIL BELAJAR', 236, 742, 10, true);
+        $kopPath = dirname(base_path()).DIRECTORY_SEPARATOR.'frontend'.DIRECTORY_SEPARATOR.'public'.DIRECTORY_SEPARATOR.'kop-surat.jpg';
+        $headerImagePath = is_file($kopPath) ? $kopPath : null;
 
-        $content .= $this->pdfTextAt('Nama', 70, 712, 9);
-        $content .= $this->pdfTextAt(': '.$report['nama'], 145, 712, 9);
-        $content .= $this->pdfTextAt('Kelas', 70, 696, 9);
-        $content .= $this->pdfTextAt(': '.$report['kelas'], 145, 696, 9);
-        $content .= $this->pdfTextAt('Tahun Ajaran', 330, 712, 9);
-        $content .= $this->pdfTextAt(': '.$report['tahunAjaran'], 420, 712, 9);
-        $content .= $this->pdfTextAt('Semester', 330, 696, 9);
-        $content .= $this->pdfTextAt(': '.$report['semester'], 420, 696, 9);
+        if ($headerImagePath !== null) {
+            $content .= $this->pdfImage('Im1', 35, 748, 525, 85);
+        } else {
+            $content .= $this->pdfCenteredTextAt('SMA IT ULIL ALBAB', 298, 807, 15, true);
+            $content .= $this->pdfCenteredTextAt('Sistem Informasi Akademik', 298, 790, 9);
+        }
 
-        $x = 55;
-        $y = 660;
+        $content .= $this->pdfCenteredTextAt('LAPORAN HASIL BELAJAR', 298, 720, 13, true);
+        $content .= $this->pdfLine(205, 717, 391, 717, 1);
+
+        $content .= $this->pdfTextAt('NAMA', 58, 696, 8, true);
+        $content .= $this->pdfTextAt(': '.$report['nama'], 145, 696, 8, true);
+        $content .= $this->pdfTextAt('NIS', 58, 684, 8, true);
+        $content .= $this->pdfTextAt(': '.$report['nis'], 145, 684, 8);
+        $content .= $this->pdfTextAt('KELAS', 58, 672, 8, true);
+        $content .= $this->pdfTextAt(': '.$report['kelas'], 145, 672, 8);
+        $content .= $this->pdfTextAt('TAHUN AJARAN', 335, 696, 8, true);
+        $content .= $this->pdfTextAt(': '.$report['tahunAjaran'], 430, 696, 8);
+        $content .= $this->pdfTextAt('SEMESTER', 335, 684, 8, true);
+        $content .= $this->pdfTextAt(': '.$report['semester'], 430, 684, 8);
+
+        $content .= $this->pdfTextAt('I.', 58, 650, 8, true);
+        $content .= $this->pdfTextAt('Nilai Hasil Belajar', 76, 650, 8, true);
+
+        $x = 58;
+        $y = 636;
         $rowHeight = 18;
-        $widths = [30, 210, 145, 55, 65];
-        $headers = ['No', 'Nama Mata Pelajaran', 'Guru Ampu', 'Angka', 'Predikat'];
-        $content .= $this->pdfTableRow($x, $y, $widths, $headers, $rowHeight, true);
+        $widths = [30, 270, 80, 100];
+        $headers = ['NO', 'MATA PELAJARAN', 'NILAI', 'PREDIKAT'];
+        $content .= $this->pdfTableRow($x, $y, $widths, $headers, $rowHeight, true, true);
         $y -= $rowHeight;
 
         $maxRows = 14;
@@ -1648,7 +1663,6 @@ class FrontendFeatureController extends Controller
             $content .= $this->pdfTableRow($x, $y, $widths, [
                 (string) ($index + 1),
                 $row['mapel'],
-                $row['guru'],
                 $row['angka'],
                 $row['predikat'],
             ], $rowHeight);
@@ -1661,30 +1675,61 @@ class FrontendFeatureController extends Controller
                 '',
                 '',
                 '',
-                '',
             ], $rowHeight);
             $y -= $rowHeight;
         }
 
-        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Total Nilai', $report['totalNilai'], '');
+        $content .= $this->pdfTableRow($x, $y, $widths, ['', 'Total Nilai', $report['totalNilai'], ''], $rowHeight, true);
         $y -= $rowHeight;
-        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Rata - rata', $report['rataRata'], '');
-        $y -= $rowHeight;
-        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Sakit', $report['sakit'], 'hari');
-        $y -= $rowHeight;
-        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Izin', $report['izin'], 'hari');
-        $y -= $rowHeight;
-        $content .= $this->pdfSummaryRow($x, $y, $widths, 'Tanpa Keterangan', $report['alpha'], 'hari');
+        $content .= $this->pdfTableRow($x, $y, $widths, ['', 'Rata-rata', $report['rataRata'], ''], $rowHeight, true);
+        $y -= $rowHeight + 22;
 
-        $signatureY = 135;
-        $content .= $this->pdfTextAt('Orang Tua/Wali', 80, $signatureY, 8, true);
-        $content .= $this->pdfTextAt('Wali Kelas', 250, $signatureY, 8, true);
-        $content .= $this->pdfTextAt('Kepala Sekolah', 410, $signatureY, 8, true);
-        $content .= $this->pdfLine(72, 80, 160, 80, 1);
-        $content .= $this->pdfLine(230, 80, 318, 80, 1);
-        $content .= $this->pdfLine(392, 80, 480, 80, 1);
+        $content .= $this->pdfTextAt('II.', 58, $y, 8, true);
+        $content .= $this->pdfTextAt('Catatan Untuk Orang Tua/Wali', 76, $y, 8, true);
+        $y -= 13;
+        $noteHeight = 18;
+        $noteWidth = array_sum($widths);
 
-        return $this->buildPdfFromContent($content, is_file($logoPath) ? $logoPath : null);
+        for ($index = 0; $index < 5; $index++) {
+            $content .= $this->pdfRect($x, $y - $noteHeight + 4, $noteWidth, $noteHeight);
+            $y -= $noteHeight;
+        }
+
+        $signatureY = max(110, $y - 16);
+        $content .= $this->pdfTextAt('Mengetahui,', 72, $signatureY, 8, true);
+        $content .= $this->pdfTextAt('Kepala Sekolah,', 72, $signatureY - 13, 8);
+        $content .= $this->pdfTextAt('Orang Tua/Wali,', 252, $signatureY - 13, 8);
+        $content .= $this->pdfTextAt('Wali Kelas,', 432, $signatureY - 13, 8);
+        $content .= $this->pdfLine(64, $signatureY - 72, 166, $signatureY - 72, 1);
+        $content .= $this->pdfLine(236, $signatureY - 72, 338, $signatureY - 72, 1);
+        $content .= $this->pdfLine(404, $signatureY - 72, 506, $signatureY - 72, 1);
+
+        $content .= $this->pdfStrokeColor(0, 0, 0);
+
+        return $this->buildPdfFromContent($content, $headerImagePath);
+    }
+
+    private function studentHomeroomTeacherName(?Student $student, string $tahunAjaran): string
+    {
+        if ($student === null || trim((string) $student->kelas) === '') {
+            return '-';
+        }
+
+        $waliKelas = SchoolClass::query()
+            ->where('nama', $student->kelas)
+            ->when($tahunAjaran !== '', fn ($query) => $query->where('tahun_ajaran', $tahunAjaran))
+            ->value('wali_kelas');
+
+        return trim((string) ($waliKelas ?: $student->wali_kelas ?: '-')) ?: '-';
+    }
+
+    private function safeReportFilename(string $name): string
+    {
+        $clean = strtoupper(trim($name));
+        $clean = preg_replace('/[^A-Z0-9 _-]/', '', $clean) ?? '';
+        $clean = preg_replace('/\s+/', ' ', $clean) ?? '';
+
+        return $clean !== '' ? $clean : 'SISWA';
     }
 
     private function semesterFromTahunAjaran(string $tahunAjaran): string
@@ -1719,15 +1764,39 @@ class FrontendFeatureController extends Controller
      * @param list<int> $widths
      * @param list<string> $cells
      */
-    private function pdfTableRow(int $x, int $y, array $widths, array $cells, int $height, bool $header = false): string
+    private function pdfTableRow(
+        int $x,
+        int $y,
+        array $widths,
+        array $cells,
+        int $height,
+        bool $header = false,
+        bool $headerFill = false
+    ): string
     {
         $content = '';
         $currentX = $x;
 
         foreach ($widths as $index => $width) {
+            if ($headerFill) {
+                $content .= $this->pdfFillColor(213, 255, 255);
+                $content .= $this->pdfFilledRect($currentX, $y - $height + 4, $width, $height);
+                $content .= $this->pdfFillColor(0, 0, 0);
+            }
+
             $content .= $this->pdfRect($currentX, $y - $height + 4, $width, $height);
-            $content .= $this->pdfTextAt($this->pdfCellText($cells[$index] ?? '', $width), $currentX + 4, $y - 8, 7, $header);
+            $content .= $this->pdfTextAt(
+                $this->pdfCellText($cells[$index] ?? '', $width),
+                $currentX + 4,
+                $y - 8,
+                7,
+                $header
+            );
             $currentX += $width;
+        }
+
+        if ($headerFill) {
+            $content .= $this->pdfFillColor(0, 0, 0);
         }
 
         return $content;
@@ -1758,6 +1827,27 @@ class FrontendFeatureController extends Controller
         return "BT\n/".$font.' '.$size." Tf\n".$x.' '.$y." Td\n(".$this->pdfText($text).") Tj\nET\n";
     }
 
+    private function pdfCenteredTextAt(string $text, int $centerX, int $y, int $size = 10, bool $bold = false): string
+    {
+        $clean = preg_replace('/[^\x20-\x7E]/', '', $text) ?? '';
+        $estimatedWidth = strlen($clean) * $size * 0.64;
+        $x = (int) round($centerX - ($estimatedWidth / 2));
+
+        return $this->pdfTextAt($text, $x, $y, $size, $bold);
+    }
+
+    private function pdfCenteredTextWithUnderline(string $text, int $centerX, int $y, int $size = 10, bool $bold = false): string
+    {
+        $clean = preg_replace('/[^\x20-\x7E]/', '', $text) ?? '';
+        $estimatedWidth = strlen($clean) * $size * 0.46;
+        $linePadding = 3;
+        $lineStart = (int) round($centerX - ($estimatedWidth / 2) - $linePadding);
+        $lineEnd = (int) round($centerX + ($estimatedWidth / 2) + $linePadding);
+
+        return $this->pdfCenteredTextAt($text, $centerX, $y, $size, $bold)
+            .$this->pdfLine($lineStart, $y - 3, $lineEnd, $y - 3, 1);
+    }
+
     private function pdfLine(int $x1, int $y1, int $x2, int $y2, int $width = 1): string
     {
         return $width." w\n".$x1.' '.$y1.' m '.$x2.' '.$y2." l S\n";
@@ -1766,6 +1856,21 @@ class FrontendFeatureController extends Controller
     private function pdfRect(int $x, int $y, int $width, int $height): string
     {
         return $x.' '.$y.' '.$width.' '.$height." re S\n";
+    }
+
+    private function pdfFilledRect(int $x, int $y, int $width, int $height): string
+    {
+        return $x.' '.$y.' '.$width.' '.$height." re f\n";
+    }
+
+    private function pdfFillColor(int $red, int $green, int $blue): string
+    {
+        return ($red / 255).' '.($green / 255).' '.($blue / 255)." rg\n";
+    }
+
+    private function pdfStrokeColor(int $red, int $green, int $blue): string
+    {
+        return ($red / 255).' '.($green / 255).' '.($blue / 255)." RG\n";
     }
 
     private function pdfImage(string $name, int $x, int $y, int $width, int $height): string
@@ -1792,8 +1897,8 @@ class FrontendFeatureController extends Controller
             '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
             '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
             '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R /F2 5 0 R >>'.$xObjectResource.' >> /Contents 6 0 R >> endobj',
-            '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
-            '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj',
+            '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >> endobj',
+            '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >> endobj',
             '6 0 obj << /Length '.strlen($content).' >> stream'."\n".$content."\nendstream endobj",
         ];
 

@@ -1011,6 +1011,9 @@
   .min-w-12 {
     min-width: calc(var(--spacing) * 12);
   }
+  .min-w-20 {
+    min-width: calc(var(--spacing) * 20);
+  }
   .min-w-\[8rem\] {
     min-width: 8rem;
   }
@@ -1043,6 +1046,9 @@
   }
   .min-w-\[1320px\] {
     min-width: 1320px;
+  }
+  .min-w-\[1540px\] {
+    min-width: 1540px;
   }
   .min-w-\[var\(--radix-select-trigger-width\)\] {
     min-width: var(--radix-select-trigger-width);
@@ -2428,6 +2434,9 @@
   .uppercase {
     text-transform: uppercase;
   }
+  .italic {
+    font-style: italic;
+  }
   .tabular-nums {
     --tw-numeric-spacing: tabular-nums;
     font-variant-numeric: var(--tw-ordinal,) var(--tw-slashed-zero,) var(--tw-numeric-figure,) var(--tw-numeric-spacing,) var(--tw-numeric-fraction,);
@@ -3384,13 +3393,6 @@
       }
     }
   }
-  .hover\:bg-white {
-    &:hover {
-      @media (hover: hover) {
-        background-color: var(--color-white);
-      }
-    }
-  }
   .hover\:bg-white\/70 {
     &:hover {
       @media (hover: hover) {
@@ -3818,6 +3820,11 @@
   .disabled\:text-gray-400 {
     &:disabled {
       color: var(--color-gray-400);
+    }
+  }
+  .disabled\:text-gray-500 {
+    &:disabled {
+      color: var(--color-gray-500);
     }
   }
   .disabled\:text-gray-600 {

@@ -173,6 +173,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../src/app/guru-kelas/rekap-absensi/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/guru-kelas/rekap-absensi">> = Specific
+  const handler = {} as typeof import("../../src/app/guru-kelas/rekap-absensi/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../src/app/guru-mapel/nilai-harian-quiz/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/guru-mapel/nilai-harian-quiz">> = Specific
@@ -357,6 +366,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends AppPageConfig<"/guru/riwayat-quran">> = Specific
   const handler = {} as typeof import("../../src/app/guru/riwayat-quran/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/guru/wali-presensi/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/guru/wali-presensi">> = Specific
+  const handler = {} as typeof import("../../src/app/guru/wali-presensi/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../src/app/guru/wali-rekap-presensi/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/guru/wali-rekap-presensi">> = Specific
+  const handler = {} as typeof import("../../src/app/guru/wali-rekap-presensi/page.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

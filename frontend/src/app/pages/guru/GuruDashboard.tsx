@@ -272,18 +272,6 @@ export default function GuruDashboard() {
               Pantau presensi, penilaian, dan aktivitas pembelajaran dari satu ruang kerja yang mengikuti akses guru.
             </p>
           </div>
-          {!(hasWaliKelas && !hasGuruMapel) && (
-            <div className="grid gap-3 sm:grid-cols-2 lg:w-[360px]">
-              <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/20 backdrop-blur">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Akses Aktif</p>
-                <p className="mt-1 text-sm font-semibold text-white">{accessLabel}</p>
-              </div>
-              <div className="rounded-xl bg-white/15 px-4 py-3 ring-1 ring-white/20 backdrop-blur">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Jadwal Hari Ini</p>
-                <p className="mt-1 text-2xl font-bold text-white">{assignments.length}</p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

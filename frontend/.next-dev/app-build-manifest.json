@@ -21,50 +21,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/[...path]/route.js"
     ],
-    "/guru/layout": [
+    "/siswa/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/guru/layout.js"
+      "static/chunks/app/siswa/layout.js"
     ],
-    "/guru/page": [
+    "/siswa/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/guru/page.js"
+      "static/chunks/app/siswa/page.js"
     ],
-    "/guru/nilai/page": [
+    "/siswa/nilai/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/guru/nilai/page.js"
-    ],
-    "/guru/rekap-nilai-akhir/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/rekap-nilai-akhir/page.js"
-    ],
-    "/guru/nilai-harian-quiz/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/nilai-harian-quiz/page.js"
-    ],
-    "/guru/nilai-harian/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/guru/nilai-harian/page.js"
-    ],
-    "/admin/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/layout.js"
-    ],
-    "/admin/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/page.js"
-    ],
-    "/admin/profile/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/admin/profile/page.js"
+      "static/chunks/app/siswa/nilai/page.js"
     ]
   }
 }
